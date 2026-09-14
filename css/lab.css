@@ -525,12 +525,15 @@ main:has(.stage-lab:not([hidden])) {
 }
 .step-text { font-size: 1.05rem; }
 .step-text strong, .step-text em { color: var(--text); }
-.step-done {
-  background: rgba(107, 255, 176, 0.1);
+.step-feedback {
   border-radius: 10px;
   padding: 0.55rem 0.7rem;
+  line-height: 1.45;
 }
+.step-feedback.pass { background: rgba(107, 255, 176, 0.1); }
+.step-feedback.fail { background: rgba(255, 107, 129, 0.12); }
 .ok-mark { color: var(--ok); font-weight: 800; }
+.fail-mark { color: var(--bad); font-weight: 800; }
 .step-actions {
   display: flex;
   flex-wrap: wrap;

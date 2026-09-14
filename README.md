@@ -35,7 +35,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 
 ## Adding things
 
-- **A station** — add an entry to [`data/stations.js`](data/stations.js). Guided steps are `{ text, when(ctx) → bool, done }`; challenges use range-based `checks` from [`js/lab/feedback.js`](js/lab/feedback.js) so many solutions pass.
+- **A station** — add an entry to [`data/stations.js`](data/stations.js). Guided steps are `{ text, when(ctx) → bool, done, notYet? }`, judged only when the student presses **Check** (never automatically), so idly landing on the right value isn't declared a win; `notYet` can be a string or `fn(ctx) → string` to explain what's still off. Challenges use range-based `checks` from [`js/lab/feedback.js`](js/lab/feedback.js) so many solutions pass.
 - **A camera body** — add an entry to [`data/cameras.js`](data/cameras.js) (sensor size, noise, lens range, ISO vs dB gain, ND labels, shutter list) and optionally a HUD style in [`js/ui/hud.js`](js/ui/hud.js).
 - **A scene** — create a module like [`js/scenes/stage.js`](js/scenes/stage.js) (lights, `ev100`, `equivFocal`, `subjects`, layers with `depth` or `depthRange`, optional `motion`) and list it in [`js/scenes/index.js`](js/scenes/index.js).
 - **A monitoring tool** — add a panel factory to [`js/ui/tools.js`](js/ui/tools.js) and a `TOOL_INFO` entry.

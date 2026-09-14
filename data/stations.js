@@ -7,11 +7,21 @@
 //  start      starting settings (iso: or gainDb:, shutter: denominator …)
 //  controls   dials the student can use; locked: shown but not adjustable
 //  tools      { available: [...], on: [...] } — see TOOL_INFO in js/ui/tools.js
-//  steps      guided: { text, when(ctx) → bool, done, hint?, enter? }
-//             enter can switch { scene, settings, camera, unlock, tool }
+//  steps      guided: { text, when(ctx) → bool, done, notYet?, hint?, enter? }
+//             `when` is only ever evaluated when the student presses the
+//             Check button — never automatically on every dial nudge — so
+//             idly passing through the right value isn't declared a win.
+//             `done` shows on success. `notYet` shows on a failed check —
+//             a string, or fn(ctx) → string to point at whichever part of a
+//             compound condition is still off (see "triangle" below); falls
+//             back to a generic line when omitted. enter can switch
+//             { scene, settings, camera, unlock, tool }.
 //  criteria   challenge: checks from js/lab/feedback.js — ranges, never one
 //             magic answer
-//  ctx        { settings, derived, camera, scene, stats }
+//  ctx        { settings, derived, camera, scene, stats, touchedKeys } —
+//             touchedKeys is the Set of control names touched since this
+//             step began (see exposure-triangle below), for steps that care
+//             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
 
 const near0 = (c, tol = 0.4) => Math.abs(c.derived.exposureStops) <= tol;
@@ -39,22 +49,26 @@ export const stations = [
     steps: [
       {
         text: "<strong>Aperture</strong> is the size of the lens opening. Move the aperture wheel and watch the meter.",
-        when: (c) => c.changedKey === "aperture",
+        when: (c) => c.touchedKeys.has("aperture"),
+        notYet: "Move the aperture wheel first, then check again.",
         done: "A bigger opening (smaller f-number) lets in more light. That's the first leg of the triangle.",
       },
       {
         text: "<strong>Shutter speed</strong> is how long each frame collects light. Move the shutter wheel.",
-        when: (c) => c.changedKey === "shutter",
+        when: (c) => c.touchedKeys.has("shutter"),
+        notYet: "Move the shutter wheel first, then check again.",
         done: "A slower shutter (like 1/30 instead of 1/125) leaves the sensor open longer, so more light gets in. That's the second leg.",
       },
       {
         text: "<strong>ISO</strong> (called gain on some cameras) doesn't collect more light — it amplifies whatever the sensor already captured. Move the ISO wheel.",
-        when: (c) => c.changedKey === "gainStops",
+        when: (c) => c.touchedKeys.has("gainStops"),
+        notYet: "Move the ISO wheel first, then check again.",
         done: "Higher ISO brightens the picture electronically, no extra light required. That's the third leg — and its cost is noise, which you'll see in the ISO station.",
       },
       {
-        text: "All three — aperture, shutter, and ISO — change exposure. Use any combination you like to bring the meter close to <strong>0</strong>.",
+        text: "All three — aperture, shutter, and ISO — change exposure. Use any combination you like to bring the meter close to <strong>0</strong>, then check.",
         when: (c) => Math.abs(c.derived.exposureStops) <= 0.5,
+        notYet: "Check the exposure meter — it's not close enough to 0 yet.",
         done: "That's the exposure triangle: three separate controls that all affect brightness, but each one also does something else — aperture changes depth of field, shutter changes motion blur, ISO changes noise. The next few stations dig into each one on its own.",
       },
     ],
@@ -182,16 +196,24 @@ export const stations = [
       {
         text: "Blur the drummer more: open to <strong>f/2.8 or wider</strong>, then use another setting to bring the meter back near <strong>0</strong>.",
         when: (c) => c.settings.aperture <= 2.8 && near0(c),
+        notYet: (c) => (c.settings.aperture > 2.8 ? "Open the aperture to f/2.8 or wider first." : "Aperture's open, but the exposure meter isn't near 0 yet — adjust shutter or ISO to compensate."),
         done: "Equivalent exposure: same brightness, shallower depth of field.",
       },
       {
         text: "Freeze the sticks: <strong>1/250 or faster</strong> — still with the meter near 0.",
         when: (c) => c.settings.shutter >= 250 && near0(c),
+        notYet: (c) => (c.settings.shutter < 250 ? "Speed the shutter up to 1/250 or faster first." : "Shutter's fast enough, but the meter isn't near 0 — compensate with aperture or ISO."),
         done: "The faster shutter cost light; you paid it back with aperture or gain. Every choice has a side effect.",
       },
       {
         text: "Now the cleanest picture: natural motion (<strong>~180°</strong>), meter near 0, and <strong>ISO 400 or lower</strong>.",
         when: (c) => near0(c, 0.5) && angleOk(c) && c.settings.gainStops <= 2.01,
+        notYet: (c) =>
+          !angleOk(c)
+            ? "Get the shutter angle close to 180° first (check the Shutter angle tool)."
+            : c.settings.gainStops > 2.01
+              ? "ISO is still above 400 — bring it down and make up the light elsewhere."
+              : "Motion and ISO look right, but the exposure meter isn't near 0 yet.",
         done: "Wide open for light, 180° for motion, minimal gain — a classic low-light setup.",
       },
     ],
