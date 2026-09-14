@@ -1,0 +1,1329 @@
+Absolutely. Here’s a thorough handoff you can copy-paste into Codex or Claude Code so it can pick up the project with the design intent already established.
+
+⸻
+
+Camera Simulator Webapp — Project Handoff / Design Brief
+
+I’m building an interactive camera simulator webapp for teaching video recording, primarily for university students learning basic AV / concert recording skills.
+
+This should not just be a toy or a collection of disconnected sliders. The goal is to make something that feels like an interactive science-museum exhibit or something like Ableton’s “Learning Synths”: visually immediate, intuitive, exploratory, but also grounded enough in real camera behavior that students build useful instincts.
+
+The app will likely live on GitHub Pages and should work well in a browser on laptops and modern phones.
+
+I am not trying to finalize every technical decision myself. I want the coding agent to take the design goals below, ask me a few useful follow-up questions, then help architect and build it.
+
+⸻
+
+Overall Goal
+
+The webapp should teach students how video camera settings affect an image.
+
+The key idea is that students should be able to manipulate camera settings and immediately see a plausible visual result.
+
+I especially want them to develop intuition about:
+
+* Aperture
+* Shutter speed
+* ISO / gain
+* Frame rate
+* White balance
+* ND filters
+* Focus
+* Depth of field
+* Motion blur
+* Exposure
+* Overexposure / clipping
+* Underexposure
+* Noise
+
+This is explicitly a video camera simulator, not primarily a still-photography simulator.
+
+Still-camera concepts overlap, obviously, but the pedagogy should revolve around video behavior.
+
+For example, shutter speed should be understood relative to frame rate, and concepts like a 180-degree shutter / approximately 1/(2 × frame rate) should be teachable.
+
+⸻
+
+Core Design Philosophy
+
+The simulator should be:
+
+* Interactive
+* Visually immediate
+* Playful
+* Accurate enough to teach useful real-world instincts
+* Modular
+* Easy to expand
+* Friendly on phones and computers
+* Capable of showing both good and bad camera settings
+* Able to support guided teaching and independent challenges
+
+I do not want a giant intimidating interface with every possible control and visualization visible at once.
+
+Instead, I want a modular system where different activities or “stations” can expose only the controls and visualizations relevant to the concept being taught.
+
+For example:
+
+* One activity might only expose aperture.
+* Another might expose aperture + ISO.
+* Another might lock frame rate and teach shutter speed.
+* Another might introduce white balance.
+* Another might become a full-camera challenge.
+
+The underlying simulation can be sophisticated, but the student-facing activity can remain simple.
+
+⸻
+
+Visual Scene Approach
+
+The current design direction is:
+
+Use several underlying visual scenes/assets, combined with a rendering/simulation layer, rather than trying to build a full 3D world.
+
+That seems like the best balance between:
+
+* realism,
+* educational usefulness,
+* performance,
+* implementation complexity,
+* and expandability.
+
+Possible scenes could eventually include things like:
+
+* Outdoor daylight
+* Indoor room
+* Concert stage
+* Low-light performance
+* Mixed lighting
+* Moving subject
+* Backlit subject
+* High-contrast scene
+* Skin tones / person
+* Colorful stage lighting
+
+The scene system should be modular enough that additional scenes can be added later.
+
+I am open to the coding agent proposing the best method for this.
+
+⸻
+
+MVP Scope
+
+I want the MVP to include a fairly complete camera-control set rather than only exposure.
+
+The MVP should ideally include:
+
+Exposure-related controls
+
+* Aperture
+* Shutter speed
+* ISO / gain
+* Frame rate
+* ND
+
+Color-related controls
+
+* White balance
+* Ideally color temperature in Kelvin
+* Potentially tint later, if useful
+
+Image-character controls
+
+* Focus
+* Depth of field
+* Motion blur
+* ISO noise
+
+The implementation does not have to simulate optical physics perfectly, but these effects should be meaningful and visually educational.
+
+⸻
+
+Camera Physics / Accuracy
+
+I would like the simulation to be more realistic rather than merely arbitrary, as long as that is practical in a browser.
+
+I understand that real camera systems are complicated and that an RGB image is not equivalent to actual light hitting a sensor.
+
+I do not necessarily need a full spectral renderer.
+
+However, I would like the math and behavior to be based on real camera relationships whenever possible.
+
+For example:
+
+Aperture
+
+Exposure contribution should reflect the actual relationship:
+
+Light reaching the sensor is proportional to approximately:
+
+1 / f-number²
+
+Therefore:
+
+* f/2.8 → f/4 is approximately -1 stop
+* f/4 → f/2.8 is approximately +1 stop
+
+The simulator should use actual stop relationships rather than arbitrary brightness multipliers.
+
+Aperture should also affect depth of field.
+
+⸻
+
+Shutter Speed
+
+Exposure should scale with shutter duration.
+
+For example:
+
+1/30 second receives approximately twice as much light as 1/60 second.
+
+That is +1 stop.
+
+Shutter should also affect motion blur.
+
+Because this is a video simulator, shutter speed should interact meaningfully with frame rate.
+
+⸻
+
+Frame Rate
+
+Frame rate should be treated as a real video parameter, not just a label.
+
+Examples:
+
+* 24 fps
+* 25 fps
+* 30 fps
+* 50 fps
+* 60 fps
+
+The app should be able to teach the idea that appropriate shutter speed depends partly on frame rate.
+
+For example:
+
+30 fps → approximately 1/60 sec for a conventional 180-degree shutter look.
+
+Students should also be able to intentionally break that relationship.
+
+For example:
+
+30 fps + 1/15 shutter
+
+or
+
+30 fps + 1/1000 shutter
+
+and visually see why those choices behave differently.
+
+⸻
+
+ISO / Gain
+
+ISO should brighten the resulting image through gain rather than pretending that more photons were captured.
+
+This distinction matters conceptually.
+
+Higher ISO should therefore:
+
+* make the image appear brighter
+* increase visible noise / image degradation
+
+Lower ISO should:
+
+* produce cleaner results
+* require more actual exposure from aperture/shutter/light
+
+The precise noise model can be simplified, but the educational behavior should be convincing.
+
+⸻
+
+ND Filter
+
+ND should reduce incoming light by stops without directly changing:
+
+* shutter speed
+* aperture
+* ISO
+
+This could be a particularly useful teaching tool for showing why ND exists.
+
+Possible values:
+
+* Off
+* ND 0.3 / 1 stop
+* ND 0.6 / 2 stops
+* ND 0.9 / 3 stops
+* etc.
+
+The specific UI terminology can be refined.
+
+⸻
+
+Exposure Model
+
+I would like the simulator to use stops in a meaningful way.
+
+The coding agent can choose the exact internal architecture, but conceptually something like:
+
+Exposure contribution =
+scene light
+× aperture contribution
+× shutter duration
+× ND attenuation
+
+Then ISO/gain occurs later in the imaging pipeline.
+
+It may be useful to internally track exposure in EV / stops, even if the student does not always see those numbers.
+
+A useful traditional relationship is:
+
+EV100 = log2(N² / t)
+
+where:
+
+* N = f-number
+* t = shutter time
+
+We do not necessarily need to teach that formula directly to beginning students.
+
+But a physically meaningful underlying model is desirable.
+
+⸻
+
+Color / White Balance
+
+I want white balance to behave meaningfully rather than simply placing a yellow or blue overlay on the image.
+
+A good middle-ground approach may be:
+
+* internally work in linear-light RGB
+* approximate illuminant color temperature
+* apply white-balance correction using RGB gains or another physically motivated color transform
+* gamma-encode for display afterward
+
+I am open to better approaches.
+
+The important thing pedagogically is that students should experience something like:
+
+3200K lighting + incorrect 5600K camera WB → visibly warm/orange image
+
+or the reverse:
+
+5600K daylight + incorrect 3200K WB → visibly blue image
+
+Then setting the correct white balance should neutralize appropriate objects.
+
+Eventually it might be useful to support mixed lighting, where no single white balance perfectly corrects everything.
+
+That does not necessarily need to be in the earliest implementation, but the architecture should not make it impossible.
+
+⸻
+
+Linear RGB vs Display RGB
+
+One technical concern I have already thought about is that simply manipulating 0–255 RGB values is not physically correct.
+
+A reasonable approach seems to be:
+
+1. Convert source imagery from sRGB into linear-light RGB.
+2. Perform exposure / light / color calculations in linear space.
+3. Apply tone mapping / clipping / sensor-like behavior as appropriate.
+4. Convert back into sRGB or another display representation.
+
+I am open to the coding agent recommending a better implementation.
+
+The main goal is to avoid naive RGB arithmetic if something only modestly more sophisticated would produce much more realistic behavior.
+
+⸻
+
+Focus and Depth of Field
+
+I want focus and depth of field in the MVP.
+
+The exact simulation method can be simplified.
+
+The student should be able to understand that:
+
+* Focus has a plane / distance.
+* Objects can be in or out of focus.
+* Wider aperture generally produces shallower depth of field.
+* Smaller aperture generally produces greater depth of field.
+
+If possible, focal length and sensor size could eventually affect this too.
+
+Those might not need to be exposed as student controls immediately, but the architecture should ideally allow them later.
+
+A scene that contains foreground, subject, and background elements would be useful for demonstrating this.
+
+⸻
+
+Motion Blur
+
+Motion blur should respond meaningfully to shutter speed.
+
+This is important because students often understand shutter only as an exposure control.
+
+I want them to see that it also changes motion rendering.
+
+For example:
+
+* 1/30 → relatively smeary motion
+* 1/60 → more conventional motion
+* 1/250 → noticeably crisp / staccato
+* 1/1000 → extremely crisp individual frames
+
+Some visual object in the scene should move so students can actually see the change.
+
+Possible examples:
+
+* rotating fan
+* swinging object
+* moving hand
+* performer
+* metronome
+* moving drumstick
+* walking person
+
+The implementation can decide what is practical.
+
+⸻
+
+Bad Settings Should Be Allowed
+
+The simulator should absolutely allow students to make bad choices.
+
+Do not protect them from:
+
+* Blown highlights
+* Crushed shadows
+* Excessive ISO noise
+* Wrong white balance
+* Excessive motion blur
+* Unnaturally fast shutter
+* Missed focus
+* Bad depth-of-field decisions
+* Strange combinations of settings
+
+That experimentation is educational.
+
+Ideally the simulator lets the student get into trouble and then diagnose the problem.
+
+⸻
+
+Visual Measurement / Monitoring Modules
+
+I would like monitoring tools to be built as modular overlays/components.
+
+Possible modules include:
+
+* Histogram
+* Waveform monitor
+* Zebras
+* Highlight clipping indicators
+* Exposure meter
+* EV / stops readout
+* Focus aids
+* Depth-of-field visualization
+* Noise display / magnifier
+* Motion blur visualization
+
+These should not all appear at once by default.
+
+An activity should be able to turn specific tools on or off.
+
+For example:
+
+A beginner exposure activity might show:
+
+* image
+* aperture
+* exposure meter
+
+A later activity might add:
+
+* histogram
+* zebras
+
+A challenge could hide everything except the camera controls.
+
+⸻
+
+Pedagogical Modes
+
+I like the idea of having a few different modes similar to some of my other educational webapps.
+
+The architecture should support something roughly like:
+
+Guided Mode
+
+This teaches the student what happens.
+
+It can:
+
+* explain concepts
+* lock certain variables
+* ask the student to change one setting
+* immediately show consequences
+* show stop changes
+* give hints
+* identify mistakes
+* display overlays
+
+For example:
+
+“Change aperture from f/4 to f/2.8.”
+
+Then it might show:
+
+“+1 stop”
+
+and explain:
+
+“The aperture opening became larger, allowing approximately twice as much light to reach the sensor.”
+
+Guided mode can be more explicit.
+
+⸻
+
+Playground
+
+Students can freely explore.
+
+Potentially:
+
+* choose a scene
+* manipulate camera controls
+* enable/disable monitoring tools
+* reset camera
+* compare settings
+
+Very little instructional interference.
+
+⸻
+
+Challenge / Mission Mode
+
+This should hide some of the teaching information.
+
+Example:
+
+“You are filming a performer at 30 fps.
+
+The image is too dark.
+
+Maintain natural-looking motion.
+
+Do not raise ISO above 800.
+
+Adjust the camera to get an appropriate exposure.”
+
+The app checks whether their solution falls within acceptable ranges.
+
+There should often be multiple valid solutions.
+
+I do not want every challenge to secretly expect one exact combination of settings.
+
+That is important.
+
+Real camera work involves tradeoffs.
+
+⸻
+
+Quiz Mode
+
+Possibly included, but not necessarily required immediately.
+
+Questions could include things like:
+
+“What change would increase exposure by one stop without affecting motion blur?”
+
+or
+
+“You are filming at 30 fps and want conventional motion blur. Which shutter speed is most appropriate?”
+
+But the simulator itself should remain more important than multiple-choice questions.
+
+⸻
+
+Guided Mode vs Challenge Mode Feedback
+
+A distinction I especially like:
+
+Guided mode
+
+Can explicitly tell students things such as:
+
+* +1 stop
+* -2 stops
+* shutter too slow
+* highlight clipping
+* white balance mismatch
+* increased noise
+* depth of field became shallower
+
+Challenge mode
+
+Should generally make students diagnose these effects themselves.
+
+It might give feedback after they submit, rather than narrating every adjustment.
+
+⸻
+
+Activity / Mission Architecture
+
+I would like activities to be data-driven if practical.
+
+For example, a mission might define:
+
+* Scene
+* Starting camera settings
+* Which controls are visible
+* Which controls are locked
+* Which monitoring tools are available
+* Student objective
+* Acceptable solution ranges
+* Hints
+* Feedback
+* Completion criteria
+
+This would make it easy to create new teaching activities without rewriting the core simulator.
+
+Conceptually, something like:
+
+Mission:
+Scene: Concert Stage
+Frame rate: 30 fps
+Frame rate locked: yes
+Starting shutter: 1/15
+Starting aperture: f/5.6
+Starting ISO: 6400
+Goal:
+Create properly exposed video with natural motion and less noise.
+Available controls:
+Shutter
+Aperture
+ISO
+Monitoring:
+Waveform off
+Histogram available
+Zebras available
+
+The coding agent should determine the best implementation.
+
+⸻
+
+Modular Architecture
+
+Modularity is very important.
+
+This project will probably grow.
+
+Even though I am doing much of this through AI-assisted / “vibe coded” development, I do not want the code to become one enormous script that is impossible to modify.
+
+A conceptual architecture might include:
+
+Camera model
+
+Tracks things such as:
+
+* aperture
+* shutter speed
+* ISO
+* frame rate
+* white balance
+* ND
+* focus distance
+* focal length
+* sensor properties
+
+Scene model
+
+Tracks things such as:
+
+* source image/assets
+* lighting
+* subject distances
+* motion
+* reference exposure
+* color temperature
+* scene metadata
+
+Simulation / imaging engine
+
+Calculates:
+
+* exposure
+* clipping
+* noise
+* white balance
+* blur
+* depth of field
+* motion effects
+
+Renderer
+
+Actually displays the result.
+
+Potential implementations could include:
+
+* Canvas
+* WebGL
+* WebGPU
+* CSS / layered DOM
+* combination
+
+I would like the coding agent to recommend an approach appropriate for modern browsers and phones.
+
+Monitoring modules
+
+Independent things like:
+
+* histogram
+* waveform
+* zebras
+* exposure meter
+
+Activity engine
+
+Loads:
+
+* guided lessons
+* playground state
+* missions/challenges
+* quiz state
+
+UI
+
+Provides:
+
+* camera controls
+* responsive layout
+* dialogs
+* instructions
+* student feedback
+
+The exact architecture does not have to match this, but separation of concerns matters.
+
+⸻
+
+Mobile Support
+
+I would like this to work well on modern phones.
+
+We can assume students generally have reasonably powerful smartphones.
+
+Phone support should therefore be considered from the beginning rather than treated as an afterthought.
+
+It does not need to support ancient devices.
+
+Important considerations:
+
+* Touch-friendly controls
+* Large enough hit targets
+* Responsive layout
+* Portrait and landscape
+* Efficient rendering
+* Reasonable battery / GPU use
+* Smooth visual feedback
+
+A phone could actually be a fun way to interact with a camera simulator because the interface can feel somewhat camera-like.
+
+I would be interested in creative mobile UI ideas.
+
+For example:
+
+* thumb-operated dials
+* swipeable setting wheels
+* camera-control strip
+* tap-to-focus
+* pinch or touch interaction
+
+But educational clarity should take priority over pretending to be an actual camera UI.
+
+⸻
+
+Camera Control UI
+
+I do not necessarily want plain HTML sliders for everything.
+
+It may be more educational and tactile to use camera-like controls.
+
+For example:
+
+Aperture
+
+A horizontal or rotating control stepping through:
+
+f/1.4
+f/2
+f/2.8
+f/4
+f/5.6
+f/8
+f/11
+f/16
+
+Possibly include third-stop values later.
+
+Shutter
+
+Could show actual shutter values:
+
+1/15
+1/30
+1/60
+1/125
+1/250
+1/500
+1/1000
+
+Again, third-stop values can be supported internally.
+
+ISO
+
+Could show:
+
+100
+200
+400
+800
+1600
+3200
+6400
+
+White Balance
+
+Could use Kelvin values.
+
+For example:
+
+2800K
+3200K
+4000K
+4800K
+5600K
+6500K
+
+with fine adjustment.
+
+The coding agent can recommend good interaction patterns.
+
+⸻
+
+Realistic Defaults
+
+A useful starting state could be something like:
+
+* 30 fps
+* 1/60 shutter
+* f/4
+* ISO 100 or native/base ISO
+* 5600K daylight
+* ND off
+
+This could become a recognizable baseline for students.
+
+That said, individual scenes should probably define their own sensible defaults.
+
+⸻
+
+Exposure Stops as an Educational Concept
+
+Stops are an important concept.
+
+Students should eventually internalize relationships like:
+
+Aperture
+
+f/2.8 → f/4 = -1 stop
+
+Shutter
+
+1/60 → 1/125 ≈ -1 stop
+
+ISO
+
+ISO 400 → ISO 800 = +1 stop of gain
+
+ND
+
+ND 0 → 1-stop ND = -1 stop of incoming light
+
+One powerful teaching feature could be showing equivalent exposure combinations.
+
+For example:
+
+f/4
+1/60
+ISO 400
+
+could produce similar brightness to:
+
+f/2.8
+1/125
+ISO 400
+
+but look different because depth of field and motion blur changed.
+
+That distinction is extremely valuable pedagogically.
+
+⸻
+
+Exposure Is Not the Only Goal
+
+The simulator should teach that simply making the image “the right brightness” is not sufficient.
+
+Students should consider:
+
+* Motion rendering
+* Noise
+* Depth of field
+* Focus
+* Highlight preservation
+* White balance
+* Frame rate
+* Creative or practical intent
+
+A challenge might therefore reject an otherwise correctly exposed result because the student created unacceptable motion blur or extreme noise.
+
+⸻
+
+Monitoring / Scope Accuracy
+
+Monitoring tools do not necessarily need to be broadcast-engineering-perfect in v1.
+
+However, they should be internally consistent with the rendered image.
+
+For example:
+
+If the image clips, the waveform and histogram should reflect that clipping.
+
+If exposure changes, the scopes should change appropriately.
+
+This would make them genuinely useful teaching tools rather than decorative graphics.
+
+⸻
+
+Potential Scene Metadata
+
+It may help for each scene to contain metadata such as:
+
+* Base illumination level
+* Lighting color temperature
+* Highlight headroom
+* Shadow range
+* Subject distance
+* Background distance
+* Motion vectors / animation
+* Reference exposure
+* Dynamic range
+* Maybe camera/sensor assumptions
+
+That way the simulator can use the same camera engine with different photographic situations.
+
+⸻
+
+Possible Sensor Model
+
+I am open to a simplified sensor model.
+
+It might include:
+
+* base sensitivity
+* dynamic range
+* clipping point
+* black level
+* shot-like noise
+* read noise approximation
+* ISO gain
+* maybe highlight rolloff / tone curve
+
+I do not necessarily need literal semiconductor-level simulation.
+
+The goal is to produce believable educational consequences.
+
+⸻
+
+Tone Mapping / Highlight Behavior
+
+I do not want exposure changes to simply multiply image brightness until pixels become ugly digital white.
+
+Some sort of camera-like tonal response would be useful.
+
+Possibilities could include:
+
+* linear sensor representation internally
+* clipping at sensor saturation
+* tone curve
+* highlight roll-off
+* optional log-like profile later
+
+The coding agent should recommend something that provides meaningful visual behavior without becoming unnecessarily complex.
+
+⸻
+
+Future Possibilities
+
+These do NOT all need to be in MVP, but the architecture should ideally leave room for them.
+
+Potential additions:
+
+* Focal length
+* Sensor size
+* Different cameras
+* Log vs standard gamma
+* Dynamic range
+* Zebra thresholds
+* False color
+* Waveform monitor
+* RGB parade
+* Focus peaking
+* Autofocus vs manual focus
+* Exposure compensation
+* Auto ISO
+* Auto shutter
+* Auto aperture
+* Camera modes
+* Indoor flicker
+* 50 Hz vs 60 Hz lighting
+* Shutter angle
+* Frame-rate changes
+* Slow motion
+* Rolling shutter
+* ND filter wheels
+* Gain in dB instead of ISO
+* Different color temperatures
+* Tint / green-magenta correction
+* Mixed-lighting scenes
+* Stage lighting
+* Spotlight clipping
+* Skin-tone exposure
+* Concert-specific challenges
+* Camera matching
+* Multi-camera matching
+* Different picture profiles
+* Codec/compression demonstrations
+* Resolution
+* Bit depth
+* Chroma subsampling
+* Rec.709 vs log
+* HDR
+* Metadata
+* Recording format
+* Storage calculations
+
+Again, most of that should remain future-facing.
+
+Do not let those possibilities derail the MVP.
+
+⸻
+
+Potential Concert-Recording Relevance
+
+This will likely be used with students learning AV concert recording.
+
+Therefore future scenarios could include:
+
+Recital Hall
+
+A pianist under stage lighting.
+
+Students need to:
+
+* expose correctly
+* avoid clipping the white piano keys / sheet music
+* maintain usable shutter
+* choose appropriate WB
+
+Singer under Spotlight
+
+Dark background + bright face.
+
+Students need to expose the person rather than simply making the entire frame look bright.
+
+Orchestra
+
+Need depth of field sufficient to keep multiple rows reasonably sharp.
+
+Fast Percussion
+
+Shows why very slow shutter creates excessive motion blur.
+
+Low-Light Performance
+
+Students must balance:
+
+* aperture
+* ISO
+* shutter
+
+with no perfect solution.
+
+These could eventually become realistic missions.
+
+⸻
+
+Design Inspiration
+
+The feeling should be closer to:
+
+* a science museum interactive station
+* Ableton Learning Synths
+* an interactive visual textbook
+* a camera lab
+
+rather than:
+
+* a dense professional camera manual
+* a traditional LMS quiz
+* a giant settings dashboard
+
+Immediate feedback and experimentation are key.
+
+⸻
+
+Student Experience
+
+Ideally a student should be able to open the app and within seconds start manipulating something.
+
+Minimal upfront reading.
+
+The app can teach through interaction.
+
+For example:
+
+Make the image brighter.
+
+Student opens aperture.
+
+Image changes immediately.
+
+Then:
+
+Great. You gained one stop of exposure. What else changed?
+
+The student notices that the background becomes blurrier.
+
+That sort of cause-and-effect learning is exactly what I want.
+
+⸻
+
+Do Not Overload Beginners
+
+Even though the simulator itself may support many parameters, introductory lessons should isolate concepts.
+
+Example progression:
+
+Station 1 — Aperture
+
+Only aperture is adjustable.
+
+Student observes:
+
+* exposure
+* depth of field
+
+Station 2 — Shutter
+
+Only shutter speed is adjustable.
+
+Student observes:
+
+* exposure
+* motion blur
+
+Station 3 — ISO
+
+Only ISO adjustable.
+
+Student observes:
+
+* brightness
+* noise
+
+Station 4 — Exposure Triangle
+
+Aperture + shutter + ISO.
+
+Station 5 — Frame Rate + Shutter
+
+Teach appropriate shutter relationships.
+
+Station 6 — White Balance
+
+Teach color temperature.
+
+Station 7 — ND
+
+Teach maintaining aperture/shutter in bright light.
+
+Station 8 — Full Camera Challenge
+
+Everything unlocked.
+
+This is roughly the pedagogical direction.
+
+⸻
+
+Debug / Developer Mode
+
+I would love a developer/debug mode.
+
+This could show almost everything at once:
+
+* current stop calculations
+* linear exposure
+* clipping
+* scene illuminance
+* internal RGB values
+* WB gains
+* noise level
+* DOF calculations
+* current mission state
+* frame timing
+* renderer performance
+
+Students would generally never see this.
+
+It would make iterative AI-assisted development much easier.
+
+⸻
+
+Data / Configuration
+
+Where practical, I would prefer parameters, scenes, and missions to live in configuration/data files rather than being hardcoded all over the UI.
+
+This should make it easier to add new activities through AI-assisted development later.
+
+For example:
+
+/scenes
+/missions
+/camera-presets
+
+or whatever architecture makes sense.
+
+⸻
+
+Performance
+
+I want a visually responsive simulator.
+
+When a student changes a setting, the image should change essentially immediately.
+
+Avoid long rerenders.
+
+If high-quality effects are expensive, consider:
+
+* low-resolution real-time preview while adjusting
+* better render after interaction stops
+* GPU shaders
+* precomputed layers
+* caching
+
+Modern phones should still feel fluid.
+
+⸻
+
+Accessibility
+
+Basic accessibility should be considered.
+
+For example:
+
+* Controls should have text values, not depend exclusively on visuals.
+* Do not use color alone to communicate success/failure.
+* Touch controls should also work with mouse/keyboard where practical.
+* Important educational text should be readable.
+
+⸻
+
+Canvas / Course Deliverables
+
+Some of my other educational webapps eventually produce a copy/paste result that students can submit in Canvas.
+
+I would like the architecture to leave room for this.
+
+For example, after completing a challenge:
+
+Generate Summary
+
+The app could produce something like:
+
+Camera Simulator Challenge
+Scene: Concert Stage
+Frame Rate: 30 fps
+Final Shutter: 1/60
+Final Aperture: f/2.8
+Final ISO: 800
+White Balance: 3200K
+Result: Passed
+Completed missions:
+Exposure Basics
+Shutter + Motion
+White Balance
+Low-Light Challenge
+
+Then:
+
+Copy to Clipboard
+
+I do not necessarily need that in the very first prototype, but it is part of the broader ecosystem of my educational webapps.
+
+⸻
+
+Important Architecture Principle
+
+Please separate the simulation itself from the teaching activities.
+
+I want to be able to make many activities using the same underlying camera.
+
+Conceptually:
+
+SIMULATOR
+Camera + Scene + Renderer
+          ↓
+ACTIVITY LAYER
+Guided / Playground / Challenge / Quiz
+          ↓
+COURSE CONTENT
+Specific missions and teaching sequences
+
+That separation is important.
+
+⸻
+
+What I Want From You Next
+
+Before coding heavily, please read this design brief and ask me a small number of high-value follow-up questions.
+
+Do not ask me dozens of implementation questions that you can reasonably decide yourself.
+
+I would especially appreciate questions where my answer changes:
+
+* the architecture,
+* the visual approach,
+* the student experience,
+* or the MVP scope.
+
+After that, make sensible technical recommendations and begin developing the project.
+
+You can take ownership of technical choices like:
+
+* framework
+* file organization
+* graphics technology
+* state management
+* rendering architecture
+* color math
+* performance strategy
+
+Explain major choices, but I do not need to micromanage implementation.
+
+The priority is:
+
+Build something educationally excellent, modular, responsive, and convincingly camera-like — then grow it iteratively.
+
+⸻
+
+One more thing I’d tell the coding agent: don’t spend the first pass trying to make the physics academically perfect. Make the architecture capable of becoming more accurate, but get the complete cause-and-effect teaching loop working early. That will let us evaluate whether aperture feels right, whether shutter blur actually teaches the concept, whether the phone UI works, etc., before getting lost in rendering math.

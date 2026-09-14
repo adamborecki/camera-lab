@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "camera-lab",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/borecki/github/camera/.claude/dev-server.py", "8124", "/Users/borecki/github/camera"],
+      "port": 8124
+    }
+  ]
+}
