@@ -62,10 +62,14 @@ function guided(api) {
     if (step.checkOnEnter) evaluate();
   }
 
-  function evaluate() {
+  // key is which control the student just moved (see lab-view.js's
+  // activity.onChange(key)) — undefined on entry/checkOnEnter. Steps that
+  // only care about the resulting state ignore it; steps that want to catch
+  // a specific control being touched can test c.changedKey.
+  function evaluate(key) {
     const step = s.steps[index];
     if (satisfied || !step) return;
-    if (step.when(api.ctx())) {
+    if (step.when({ ...api.ctx(), changedKey: key })) {
       satisfied = true;
       doneEl.hidden = false;
       doneEl.innerHTML = `<span class="ok-mark" aria-hidden="true">✓</span> ${step.done}`;
@@ -75,7 +79,7 @@ function guided(api) {
       } else {
         markComplete(s.id);
         nextBtn.hidden = false;
-        nextBtn.textContent = "Station complete — back to the floor";
+        nextBtn.textContent = "Station complete — back to Home";
       }
     }
   }

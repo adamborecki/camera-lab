@@ -68,7 +68,7 @@ async function renderStation(id) {
 
   const header = document.createElement("div");
   header.className = "stage-header";
-  header.innerHTML = `<a class="back-link" href="#/">← Floor</a><h2>${station.title}</h2>`;
+  header.innerHTML = `<a class="back-link" href="#/">← Home</a><h2>${station.title}</h2>`;
   stageEl.appendChild(header);
 
   const body = document.createElement("div");

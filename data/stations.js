@@ -24,6 +24,42 @@ const sharp = (c, key) => {
 export const stations = [
   // ---------------- learn ----------------
   {
+    id: "exposure-triangle",
+    title: "The Exposure Triangle",
+    purpose: "Three different controls, one shared job: brightness.",
+    group: "learn",
+    accent: "#FFB4A2",
+    mode: "guided",
+    scene: "stage",
+    camera: "lab",
+    start: { aperture: 4, iso: 400, shutter: 60, fps: 30, focus: 2.5, wb: 3200 },
+    controls: ["aperture", "shutter", "iso"],
+    tools: { available: ["meter", "hud"], on: ["meter", "hud"] },
+    intro: "Three controls decide how bright your video looks. Try each one — the meter shows what happened.",
+    steps: [
+      {
+        text: "<strong>Aperture</strong> is the size of the lens opening. Move the aperture wheel and watch the meter.",
+        when: (c) => c.changedKey === "aperture",
+        done: "A bigger opening (smaller f-number) lets in more light. That's the first leg of the triangle.",
+      },
+      {
+        text: "<strong>Shutter speed</strong> is how long each frame collects light. Move the shutter wheel.",
+        when: (c) => c.changedKey === "shutter",
+        done: "A slower shutter (like 1/30 instead of 1/125) leaves the sensor open longer, so more light gets in. That's the second leg.",
+      },
+      {
+        text: "<strong>ISO</strong> (called gain on some cameras) doesn't collect more light — it amplifies whatever the sensor already captured. Move the ISO wheel.",
+        when: (c) => c.changedKey === "gainStops",
+        done: "Higher ISO brightens the picture electronically, no extra light required. That's the third leg — and its cost is noise, which you'll see in the ISO station.",
+      },
+      {
+        text: "All three — aperture, shutter, and ISO — change exposure. Use any combination you like to bring the meter close to <strong>0</strong>.",
+        when: (c) => Math.abs(c.derived.exposureStops) <= 0.5,
+        done: "That's the exposure triangle: three separate controls that all affect brightness, but each one also does something else — aperture changes depth of field, shutter changes motion blur, ISO changes noise. The next few stations dig into each one on its own.",
+      },
+    ],
+  },
+  {
     id: "aperture",
     title: "Aperture",
     purpose: "The lens opening: more light — and less in focus.",
@@ -41,7 +77,7 @@ export const stations = [
         text: "The singer looks a bit dark. Open the aperture to <strong>f/2.8</strong>.",
         hint: "Smaller f-number = bigger opening. Drag the wheel left or tap − .",
         when: (c) => c.settings.aperture <= 2.8,
-        done: "+1 stop: about twice as much light. Now look behind the singer — the drummer got softer too.",
+        done: "+1 stop: about twice as much light. Now look behind the singer — the drummer got blurrier. A wider aperture means a shallower depth of field, so more of the background falls out of focus.",
       },
       {
         text: "Open all the way to <strong>f/1.4</strong>.",
