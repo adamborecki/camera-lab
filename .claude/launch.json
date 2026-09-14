@@ -4,7 +4,7 @@
     {
       "name": "camera-lab",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["/Users/borecki/github/camera/.claude/dev-server.py", "8124", "/Users/borecki/github/camera"],
+      "runtimeArgs": ["/Users/borecki/github/camera-lab/.claude/dev-server.py", "8124", "/Users/borecki/github/camera-lab"],
       "port": 8124
     }
   ]
