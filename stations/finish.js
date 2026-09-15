@@ -2,7 +2,9 @@
 // readable summary, and a JSON block with a SHA-256 checksum to paste into
 // Canvas. Challenge entries include the student's final camera settings.
 import { getState, setReflection, markComplete } from "../js/progress.js";
-import { stations } from "../data/stations.js";
+import { stations, SECTIONS } from "../data/stations.js";
+
+const sectionLabel = Object.fromEntries(SECTIONS);
 
 const STATION_ID = "finish";
 const RECEIPT_SCHEMA = "camera-lab-receipt-v1";
@@ -60,6 +62,7 @@ export function mount(container) {
       return {
         id: s.id,
         title: s.title,
+        section: sectionLabel[s.group] || s.group,
         type: s.mode,
         opened: !!p.opened,
         completed: !!p.completed,

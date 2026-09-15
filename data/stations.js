@@ -2,7 +2,10 @@
 // (js/lab/lab-view.js). To add one, copy an entry and change it.
 //
 //  mode       "guided" (steps), "challenge" (brief + criteria), "playground"
-//  group      floor section: learn / challenge / play / finish
+//  group      floor section: one of SECTIONS below (learn / go-further /
+//             challenge / play / finish) — nothing gates a later section on
+//             an earlier one finishing; grouping is for homework chunking
+//             and page layout only, not a progression lock
 //  scene      scene id (js/scenes); camera: camera id (data/cameras.js)
 //  start      starting settings (iso: or gainDb:, shutter: denominator …)
 //  controls   dials the student can use; locked: shown but not adjustable
@@ -23,6 +26,17 @@
 //             step began (see exposure-triangle below), for steps that care
 //             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
+
+// Floor sections, in display order. Rename the label text freely (e.g. to
+// match an actual Canvas assignment name each term) — station.group values
+// elsewhere in this file must keep matching the id on the left.
+export const SECTIONS = [
+  ["learn", "Homework 1 — Exposure Basics"],
+  ["go-further", "Homework 2 — Go Further"],
+  ["challenge", "Challenges"],
+  ["play", "Free play"],
+  ["finish", "Finish"],
+];
 
 const near0 = (c, tol = 0.4) => Math.abs(c.derived.exposureStops) <= tol;
 const angleOk = (c) => c.derived.shutterAngle >= 150 && c.derived.shutterAngle <= 220;
@@ -259,7 +273,7 @@ export const stations = [
     id: "wb",
     title: "White Balance",
     purpose: "Telling the camera what color “white” light is.",
-    group: "learn",
+    group: "go-further",
     accent: "#FFA36C",
     mode: "guided",
     scene: "stage",
@@ -291,7 +305,7 @@ export const stations = [
     id: "nd",
     title: "ND Filters",
     purpose: "Sunglasses for the lens: less light, nothing else changes.",
-    group: "learn",
+    group: "go-further",
     accent: "#6FA8FF",
     mode: "guided",
     scene: "park",
@@ -317,7 +331,7 @@ export const stations = [
     id: "focus",
     title: "Focus & Depth of Field",
     purpose: "Pick what's sharp — and how much around it stays sharp.",
-    group: "learn",
+    group: "go-further",
     accent: "#FF8A8A",
     mode: "guided",
     scene: "stage",
@@ -349,7 +363,7 @@ export const stations = [
     id: "sensor",
     title: "Sensor Size",
     purpose: "Full frame vs. crop vs. camcorder — same shot, different depth.",
-    group: "learn",
+    group: "go-further",
     accent: "#C3F584",
     mode: "guided",
     scene: "stage",

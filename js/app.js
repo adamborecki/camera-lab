@@ -1,4 +1,4 @@
-import { stations, getStation } from "../data/stations.js";
+import { stations, getStation, SECTIONS } from "../data/stations.js";
 import { mountLab } from "./lab/lab-view.js";
 import { recordOpen, isComplete, completionSummary } from "./progress.js";
 import { setActiveStation, clearActiveStation } from "./time-tracker.js";
@@ -6,13 +6,6 @@ import { setActiveStation, clearActiveStation } from "./time-tracker.js";
 const floorEl = document.getElementById("floor");
 const stageEl = document.getElementById("stage");
 let currentUnmount = null;
-
-const GROUPS = [
-  ["learn", "Learn the controls"],
-  ["challenge", "Challenges"],
-  ["play", "Free play"],
-  ["finish", "Finish"],
-];
 
 function stationCard(station) {
   const card = document.createElement("a");
@@ -38,7 +31,7 @@ function renderFloor() {
   summary.textContent = done >= total ? `All ${total} stations done ✓` : `${done}/${total} stations completed`;
   floorEl.appendChild(summary);
 
-  for (const [group, heading] of GROUPS) {
+  for (const [group, heading] of SECTIONS) {
     const list = stations.filter((s) => s.group === group && !s.hidden);
     if (!list.length) continue;
     const h = document.createElement("h2");
