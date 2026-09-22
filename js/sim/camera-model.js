@@ -18,6 +18,15 @@ export const SCENE_H = 720;
 // clip one raw channel before the picture itself reaches white.
 export const SENSOR_SAT = 3.0;
 export const INFINITY_M = 1000;
+// "Acceptably sharp": a blur circle narrower than this many scene pixels.
+// The classic stills criterion (0.03 mm of circle of confusion on full frame)
+// assumes an 8x10 print viewed at arm's length; on a 1280 px wide frame it
+// works out to 1.07 px whatever the sensor size, which is finer than this
+// picture can draw (the renderer skips blur below 0.7 px) — so the focus map
+// used to call subjects soft that looked perfectly sharp on screen. The
+// criterion has always depended on how the footage is judged; 2 px is the
+// same math judged at the resolution we actually deliver.
+export const SHARP_PX = 2;
 
 export const APERTURE_LADDER = [
   1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.5, 2.8, 3.2, 3.5, 4, 4.5, 5, 5.6, 6.3, 7.1, 8, 9, 10, 11, 13,
@@ -159,7 +168,10 @@ export function derive(s, camera, scene) {
   const S = Math.max(s.focus * 1000, focal * 1.5);
   const cocPerUnit = (focal * focal) / (N * (S - focal)); // mm on sensor × |d−S|/d
   const cocScalePx = (cocPerUnit / sensorWidth) * SCENE_W; // blur-circle diameter in scene px
-  const cocLimit = 0.03 / crop; // "acceptably sharp" criterion
+  // Same criterion the picture is drawn with: SHARP_PX of the rendered frame,
+  // converted to mm on this sensor. (Smaller sensor → smaller circle → the
+  // deeper depth of field small cameras really have.)
+  const cocLimit = (SHARP_PX / SCENE_W) * sensorWidth;
   const H = (focal * focal) / (N * cocLimit) + focal;
   const dofNear = (S * (H - focal)) / (H + S - 2 * focal) / 1000;
   const dofFar = S < H ? (S * (H - focal)) / (H - S) / 1000 : Infinity;
