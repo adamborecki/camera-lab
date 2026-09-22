@@ -403,7 +403,7 @@ export const stations = [
     scene: "stage",
     camera: "lab",
     cameraChoice: true,
-    start: { fps: 30, shutter: 15, aperture: 5.6, iso: 6400, focus: 5.5, wb: 3200 },
+    start: { fps: 30, shutter: 15, aperture: 5.6, iso: 6400, focus: 5, wb: 3200 },
     controls: ["shutter", "aperture", "iso", "focus"],
     locked: ["fps"],
     tools: { available: ["histogram", "zebras", "waveform", "magnify", "hud"], on: ["hud"] },

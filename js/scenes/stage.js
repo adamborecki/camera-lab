@@ -24,12 +24,12 @@ export const stageScene = {
     led: { kelvin: 6500, intensity: 16, tint: [0.35, 0.55, 1.7], label: "Blue LED pars" },
     beam: { kelvin: 3200, intensity: 0.6, label: "Haze beams" },
   },
-  // Named things students can be asked to focus on. The kit sits 3 m behind
+  // Named things students can be asked to focus on. The kit sits 2.5 m behind
   // the singer: far enough that a wide aperture melts it, close enough that
-  // stopping down can hold both — the "both sharp" step in the Focus station.
+  // f/9 can hold both — the "both sharp" step in the Focus station.
   subjects: {
     singer: { label: "the singer", depth: 2.5 },
-    drummer: { label: "the drummer", depth: 5.5 },
+    drummer: { label: "the drummer", depth: 5 },
     mic: { label: "the mic stand", depth: 1.3 },
     lamps: { label: "the stage lights", depth: 10 },
   },
@@ -148,7 +148,7 @@ export const stageScene = {
     {
       id: "drums",
       name: "Drummer & kit",
-      depth: 5.5,
+      depth: 5,
       light: "wash",
       draw(ctx) {
         person(ctx, 430, 250, 0.55, {
@@ -186,7 +186,7 @@ export const stageScene = {
     {
       id: "stick-r",
       name: "Drumstick (right)",
-      depth: 5.4,
+      depth: 4.9,
       light: "wash",
       motion: { pivot: [505, 372], rotBase: -0.35, rotAmp: 0.55, rotFreq: 3.2, radius: 120 },
       draw(ctx) {
@@ -203,7 +203,7 @@ export const stageScene = {
     {
       id: "stick-l",
       name: "Drumstick (left)",
-      depth: 5.4,
+      depth: 4.9,
       light: "wash",
       motion: { pivot: [360, 380], rotBase: 0.3, rotAmp: 0.5, rotFreq: 3.2, rotPhase: Math.PI, radius: 120 },
       draw(ctx) {
