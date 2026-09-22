@@ -12,8 +12,13 @@ function stationCard(station) {
   card.className = "station-card";
   card.href = `#/station/${station.id}`;
   card.style.setProperty("--accent", station.accent);
-  const badge = isComplete(station.id) ? '<span class="badge badge-complete">✓ Done</span>' : "";
-  card.innerHTML = `${badge}<h3>${station.title}</h3><p>${station.purpose}</p><span class="enter-hint">Enter →</span>`;
+  const badges = [
+    isComplete(station.id) ? '<span class="badge badge-complete">✓ Done</span>' : "",
+    station.mode === "challenge" ? '<span class="badge badge-challenge">Challenge</span>' : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  card.innerHTML = `${badges}<h3>${station.title}</h3><p>${station.purpose}</p><span class="enter-hint">Enter →</span>`;
   return card;
 }
 

@@ -5,7 +5,7 @@
 //    { label, test(ctx) → { pass, detail } } where ctx is
 //    { settings, derived, camera, scene, stats }. Criteria use ranges, so a
 //    challenge accepts every reasonable solution, not one magic combination.
-import { formatStops, stopWord, formatDistance, formatShutterAngle, gainOptions } from "../sim/camera-model.js";
+import { formatStops, stopWord, formatDistance, formatShutterAngle, formatFocal, gainOptions } from "../sim/camera-model.js";
 
 function gainLabel(camera, stops) {
   const opts = gainOptions(camera);
@@ -50,10 +50,16 @@ export function describeChange(key, prev, next, prevD, nextD, camera) {
     case "focus":
       text = `Focus ${formatDistance(prev.focus)} → ${formatDistance(next.focus)}.`;
       break;
+    case "focal": {
+      const tighter = next.focal > prev.focal;
+      text = `Zoom ${formatFocal(prev.focal, camera)} → ${formatFocal(next.focal, camera)}: ${tighter ? "tighter framing, and the longer lens throws the background further out of focus" : "wider framing, and more of the depth looks sharp"}. Exposure is unchanged — the f-number already accounts for focal length.`;
+      break;
+    }
     default:
       text = stopsPhrase(dExp);
   }
-  return { stops: dExp, text, tone, short: key === "focus" || key === "wb" || key === "fps" ? "" : formatStops(dExp) };
+  const noStops = key === "focus" || key === "wb" || key === "fps" || key === "focal";
+  return { stops: dExp, text, tone, short: noStops ? "" : formatStops(dExp) };
 }
 
 // ---------- criteria ----------

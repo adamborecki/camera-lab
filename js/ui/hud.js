@@ -2,13 +2,18 @@
 // sit, how values are written (Sony "60" vs Canon "1/60", "9dB" vs "ISO 800"),
 // and a font that evokes it. Purely presentational: it reads settings and
 // derived values, never changes them.
-import { gainOptions, formatDistance, formatStops, formatShutterAngle } from "../sim/camera-model.js";
+import { gainOptions, realFocal, formatDistance, formatStops, formatShutterAngle } from "../sim/camera-model.js";
 
 function gainText(camera, s) {
   const opts = gainOptions(camera);
   let best = opts[0];
   for (const o of opts) if (Math.abs(o.value - s.gainStops) < Math.abs(best.value - s.gainStops)) best = o;
   return camera.gain.mode === "db" ? `${best.shown}dB` : `ISO ${best.shown}`;
+}
+
+// Bodies mark the lens in real millimetres, whatever their sensor size.
+function focalText(camera, s) {
+  return `${Math.round(realFocal(s.focal, camera))}mm`;
 }
 
 function ndText(camera, s) {
@@ -40,7 +45,7 @@ const STYLES = {
     const sh = `1/${s.shutter} <small>${formatShutterAngle(d.shutterAngle)}</small>`;
     return {
       top: `<div class="hud-strip">
-        <span>${s.fps}p</span><span>${sh}</span><span>F${s.aperture}</span>
+        <span>${s.fps}p</span><span>${focalText(cam, s)}</span><span>${sh}</span><span>F${s.aperture}</span>
         <span>${gainText(cam, s)}</span><span>${ndText(cam, s) || "CLEAR"}</span><span>${Math.round(s.wb)}K</span></div>`,
       tl: `${rec(x)} <span>${timecode(x.recSeconds, s.fps, true)}</span>`,
       br: `<span class="hud-ev">EXP ${formatStops(d.exposureStops)}</span>`,
@@ -52,13 +57,13 @@ const STYLES = {
       tl: `${rec(x)} <span>${timecode(x.recSeconds, s.fps, false)}</span>`,
       tr: `<span>${s.fps}p</span> <span class="hud-batt">▮▮▮</span>`,
       left: `${ndText(cam, s) ? `<span class="hud-box">${ndText(cam, s)}</span>` : ""}<span>${Math.round(s.wb)}K</span><span>MF ${formatDistance(s.focus)}</span>`,
-      bottom: `<span>${s.shutter}</span><span>F${s.aperture}</span><span>${gainText(cam, s)}</span><span class="hud-ev">M.M ${formatStops(d.exposureStops)}</span>`,
+      bottom: `<span>${focalText(cam, s)}</span><span>${s.shutter}</span><span>F${s.aperture}</span><span>${gainText(cam, s)}</span><span class="hud-ev">M.M ${formatStops(d.exposureStops)}</span>`,
     };
   },
   canon(s, d, cam, x) {
     return {
       top: `<span>${rec(x)}</span><span>${timecode(x.recSeconds, s.fps, true)}</span>`,
-      left: `<span>1/${s.shutter}</span><span>F${s.aperture.toFixed(1)}</span><span>${gainText(cam, s).replace("dB", ".0 dB")}</span><span>${Math.round(s.wb)}K</span>`,
+      left: `<span>${focalText(cam, s)}</span><span>1/${s.shutter}</span><span>F${s.aperture.toFixed(1)}</span><span>${gainText(cam, s).replace("dB", ".0 dB")}</span><span>${Math.round(s.wb)}K</span>`,
       tr: `<span>${s.fps}P</span>`,
       bl: `<span>MF ${formatDistance(s.focus)}</span>`,
       br: meterScale(d.exposureStops),
@@ -68,7 +73,7 @@ const STYLES = {
     return {
       tl: `<span class="hud-box">${s.fps}p</span> ${rec(x)}`,
       tr: `<span>${timecode(x.recSeconds, s.fps, false)}</span>`,
-      bottom: `<span>1/${s.shutter}</span><span>F${s.aperture.toFixed(1)}</span>${meterScale(d.exposureStops)}<span>${gainText(cam, s)}</span><span>${Math.round(s.wb)}K</span>`,
+      bottom: `<span>${focalText(cam, s)}</span><span>1/${s.shutter}</span><span>F${s.aperture.toFixed(1)}</span>${meterScale(d.exposureStops)}<span>${gainText(cam, s)}</span><span>${Math.round(s.wb)}K</span>`,
       left: ndText(cam, s) ? `<span>${ndText(cam, s)}</span>` : "",
     };
   },
@@ -76,7 +81,7 @@ const STYLES = {
     return {
       tl: `${rec(x)} <span>${timecode(x.recSeconds, s.fps, false)}</span>`,
       tr: `<span>${s.fps}p</span>`,
-      bottom: `<span>1/${s.shutter}</span><span>F${s.aperture}</span><span>${formatStops(d.exposureStops)}</span><span>${gainText(cam, s)}</span>${ndText(cam, s) ? `<span>${ndText(cam, s)}</span>` : ""}`,
+      bottom: `<span>${focalText(cam, s)}</span><span>1/${s.shutter}</span><span>F${s.aperture}</span><span>${formatStops(d.exposureStops)}</span><span>${gainText(cam, s)}</span>${ndText(cam, s) ? `<span>${ndText(cam, s)}</span>` : ""}`,
       bl: `<span>MF ${formatDistance(s.focus)}</span>`,
     };
   },

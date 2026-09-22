@@ -5,7 +5,8 @@
 // Canonical settings shape (camera-independent):
 //   { fps, shutter (denominator, 60 = 1/60 s), aperture (nominal f-number),
 //     gainStops (stops of gain above ISO 100), nd (stops), wb (kelvin),
-//     focus (meters) }
+//     focus (meters), focal (35mm-EQUIVALENT focal length, mm — see
+//     "framing" below; the real lens on the body is focal / crop) }
 import { whiteBalanceGains } from "./color.js";
 
 // Every scene is drawn at this resolution; blur radii are in these pixels.
@@ -90,9 +91,36 @@ export function fpsOptions(camera) {
   return camera.fps.map((f) => ({ value: f, label: `${f}p`, major: true }));
 }
 
-// Kelvin and focus are continuous; dials treat them with a position mapping.
+// Kelvin, focus and zoom are continuous; dials treat them with a position
+// mapping.
 export const WB_RANGE = { min: 2000, max: 10000, step: 50 };
 export const FOCUS_RANGE = { min: 0.4, max: 100 };
+
+// ---------- framing ----------
+//
+// A scene is drawn once, at one field of view: scene.equivFocal, written as
+// the 35mm-equivalent focal length that would frame it that way. The lens
+// setting (settings.focal) is in those same equivalent millimetres, so it
+// means the same framing on every body, while the REAL focal length on the
+// barrel is focal / crop — a smaller sensor needs a shorter lens to frame
+// the same shot, which is exactly why it shows more depth of field.
+//
+// Put another way: keep the real lens and switch to a smaller sensor and the
+// shot zooms in by the crop factor, because the smaller sensor only covers
+// the middle of the image the lens projects. The sim does that by cropping
+// into the drawn scene, so it can never frame WIDER than scene.equivFocal,
+// and past MAX_FRAME_ZOOM the 1280px scene image would visibly soften — so
+// that's where the zoom range stops, tighter than a 5.6× crop would really go.
+export const MAX_FRAME_ZOOM = 3;
+
+export function focalRange(scene) {
+  return { min: scene.equivFocal, max: scene.equivFocal * MAX_FRAME_ZOOM };
+}
+
+// The real focal length (mm) that gives this framing on this body.
+export function realFocal(focalEquiv, camera) {
+  return focalEquiv / camera.sensor.crop;
+}
 
 function nearest(options, v, key = "value") {
   let best = options[0];
@@ -105,8 +133,9 @@ function nearestLog(options, v) {
   return best;
 }
 
-// Snap any settings object onto what a given body can actually do.
-export function normalizeSettings(s, camera) {
+// Snap any settings object onto what a given body can actually do (and, for
+// the lens, what the scene can be framed at).
+export function normalizeSettings(s, camera, scene) {
   const out = { ...s };
   out.fps = nearest(fpsOptions(camera), s.fps).value;
   out.shutter = nearestLog(shutterOptions(camera), s.shutter).value;
@@ -115,11 +144,15 @@ export function normalizeSettings(s, camera) {
   out.nd = nearest(ndOptions(camera), s.nd).value;
   out.wb = Math.min(WB_RANGE.max, Math.max(WB_RANGE.min, s.wb));
   out.focus = Math.min(INFINITY_M, Math.max(FOCUS_RANGE.min, s.focus));
+  const lens = focalRange(scene);
+  out.focal = Math.min(lens.max, Math.max(lens.min, s.focal ?? lens.min));
   return out;
 }
 
-// Station data speaks in ISO ("iso: 800"); convert once on load.
-export function settingsFromPreset(p) {
+// Station data speaks in ISO ("iso: 800"); convert once on load. A station
+// that says nothing about the lens gets the scene's own framing (the widest
+// the drawn scene can be shown at), so nothing zooms unless it means to.
+export function settingsFromPreset(p, scene) {
   return {
     fps: p.fps ?? 30,
     shutter: p.shutter ?? 60,
@@ -128,6 +161,7 @@ export function settingsFromPreset(p) {
     nd: p.nd ?? 0,
     wb: p.wb ?? 5600,
     focus: p.focus ?? 3,
+    focal: p.focal ?? scene.equivFocal,
   };
 }
 
@@ -151,14 +185,22 @@ export function derive(s, camera, scene) {
   const rawScale = 2 ** sensorStops;
   const gain = 2 ** s.gainStops;
 
-  // Optics: the scene fixes the framing (35mm-equivalent focal length), so a
-  // smaller sensor needs a shorter real lens — and gets deeper focus.
+  // Optics. s.focal is the framing, as a 35mm-equivalent focal length; the
+  // real lens on this body is that over the crop factor. So a smaller sensor
+  // at the same framing runs a shorter lens — and gets deeper focus for it —
+  // while at the same REAL lens it frames tighter (frameZoom).
   const crop = camera.sensor.crop;
   const sensorWidth = 36 / crop;
-  const focal = scene.equivFocal / crop;
+  const focalEquiv = s.focal;
+  const focal = focalEquiv / crop;
+  const frameZoom = focalEquiv / scene.equivFocal; // ≥ 1: crop into the drawn scene
   const S = Math.max(s.focus * 1000, focal * 1.5);
   const cocPerUnit = (focal * focal) / (N * (S - focal)); // mm on sensor × |d−S|/d
-  const cocScalePx = (cocPerUnit / sensorWidth) * SCENE_W; // blur-circle diameter in scene px
+  // Blur-circle diameter as px of the displayed frame (the whole sensor
+  // width), and as px of the drawn scene image — which the blur pass works
+  // in, and which the view then magnifies by frameZoom.
+  const cocScalePx = (cocPerUnit / sensorWidth) * SCENE_W;
+  const cocScenePx = cocScalePx / frameZoom;
   const cocLimit = 0.03 / crop; // "acceptably sharp" criterion
   const H = (focal * focal) / (N * cocLimit) + focal;
   const dofNear = (S * (H - focal)) / (H + S - 2 * focal) / 1000;
@@ -188,8 +230,11 @@ export function derive(s, camera, scene) {
     crop,
     sensorWidth,
     focal,
+    focalEquiv,
+    frameZoom,
     focusMm: S,
     cocScalePx,
+    cocScenePx,
     dofNear,
     dofFar,
     blurPxAt,
@@ -223,6 +268,14 @@ export function formatDistance(m) {
   if (m < 1) return `${Math.round(m * 100)} cm`;
   if (m < 10) return `${m.toFixed(1)} m`;
   return `${Math.round(m)} m`;
+}
+
+// Lenses are marked in real millimetres, but how tight the shot looks is the
+// 35mm equivalent — which is why camcorder specs quote both.
+export function formatFocal(focalEquiv, camera) {
+  const real = Math.round(realFocal(focalEquiv, camera));
+  if (camera.sensor.crop === 1) return `${real}mm`;
+  return `${real}mm (${Math.round(focalEquiv)}mm eq)`;
 }
 
 export function formatShutterAngle(angle) {

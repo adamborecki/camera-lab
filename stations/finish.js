@@ -88,7 +88,7 @@ export function mount(container) {
       lines.push(`Challenge — ${c.title}: ${c.result}`);
       if (c.finalSettings) {
         const f = c.finalSettings;
-        lines.push(`  ${f.camera} · ${f.frameRate} · ${f.shutter} · ${f.aperture} · ${f.gain} · ND ${f.nd} · WB ${f.whiteBalance} · focus ${f.focus}`);
+        lines.push(`  ${f.camera} · ${f.lens || "—"} · ${f.frameRate} · ${f.shutter} · ${f.aperture} · ${f.gain} · ND ${f.nd} · WB ${f.whiteBalance} · focus ${f.focus}`);
       }
     }
     const payload = {

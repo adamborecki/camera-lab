@@ -400,7 +400,9 @@ export class Renderer {
   }
 
   runDof(derived) {
-    const key = `${derived.cocScalePx.toFixed(4)}|${derived.focusMm.toFixed(1)}`;
+    // Blur is applied to the drawn scene image, which the view may then
+    // magnify — so this pass works in scene pixels, not displayed ones.
+    const key = `${derived.cocScenePx.toFixed(4)}|${derived.focusMm.toFixed(1)}`;
     if (key === this.dofKey) return;
     this.dofKey = key;
     const gl = this.gl;
@@ -412,7 +414,7 @@ export class Renderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.srcTex);
     gl.uniform1i(P.u("uSrc"), 0);
-    gl.uniform1f(P.u("uCocScale"), derived.cocScalePx);
+    gl.uniform1f(P.u("uCocScale"), derived.cocScenePx);
     gl.uniform1f(P.u("uFocusMm"), derived.focusMm);
     this.layers.forEach((layer, i) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.blurFbos[i]);
@@ -428,7 +430,7 @@ export class Renderer {
 
   // How many sub-frame samples a mover needs so its streak has no gaps:
   // about one per pixel travelled while the shutter is open.
-  motionSamples(m, t0, shutter) {
+  motionSamples(m, t0, shutter, zoom = 1) {
     const steps = 8;
     let len = 0;
     let prev = motionAt(m, t0);
@@ -437,7 +439,7 @@ export class Renderer {
       len += Math.abs(cur.th - prev.th) * (m.radius || 100) + Math.hypot(cur.tx - prev.tx, cur.ty - prev.ty);
       prev = cur;
     }
-    return Math.max(1, Math.min(MAX_MOTION_SAMPLES, Math.ceil(len)));
+    return Math.max(1, Math.min(MAX_MOTION_SAMPLES, Math.ceil(len * zoom)));
   }
 
   // opts: { settings, derived, time, frameIndex, view:{x,y,zoom}, zebra,
@@ -463,6 +465,7 @@ export class Renderer {
     gl.uniform1iv(P.u("uLayerMover"), this.layerMover);
 
     const time = opts.time % TIME_WRAP;
+    const view = opts.view || { x: 0.5, y: 0.5, zoom: 1 };
     const A = new Float32Array(MAX_MOVERS * 4);
     const B = new Float32Array(MAX_MOVERS * 4);
     const C = new Float32Array(MAX_MOVERS * 4);
@@ -474,7 +477,7 @@ export class Renderer {
       B.set([m.rotFreq || 0, m.rotPhase || 0, m.spin || 0, m.bounce ? 1 : 0], j * 4);
       C.set([m.txAmp || 0, m.tyAmp || 0, m.tFreq || 0, m.tPhase || 0], j * 4);
       D.set([m.pivot[0], m.pivot[1], (m.radius || 100) + Math.abs(m.txAmp || 0) + Math.abs(m.tyAmp || 0) + 6, 0], j * 4);
-      K[j] = this.motionSamples(m, time, derived.t);
+      K[j] = this.motionSamples(m, time, derived.t, view.zoom);
       totalSamples += K[j];
     });
     this.stats.samples = totalSamples;
@@ -485,7 +488,6 @@ export class Renderer {
     gl.uniform1iv(P.u("uMotSamples"), K);
     gl.uniform1f(P.u("uTime0"), time);
     gl.uniform1f(P.u("uShutter"), derived.t);
-    const view = opts.view || { x: 0.5, y: 0.5, zoom: 1 };
     gl.uniform3f(P.u("uView"), view.x, view.y, view.zoom);
     gl.uniform1f(P.u("uRawScale"), derived.rawScale);
     gl.uniform1f(P.u("uGain"), derived.gain);
