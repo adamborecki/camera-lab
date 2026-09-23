@@ -15,6 +15,10 @@ export const stageScene = {
   // Correct exposure (ISO 100) for the singer's face under the spotlight.
   ev100: 6,
   equivFocal: 85,
+  // Where the operator keeps the camera pointed as the shot gets tighter
+  // (uv, v down) — the singer. At the widest framing there's nothing outside
+  // the drawn scene to pan to, so the aim only starts to matter on the way in.
+  aim: [0.69, 0.36],
   defaults: { fps: 30, shutter: 60, aperture: 2.8, iso: 800, nd: 0, wb: 3200, focus: 2.5 },
   lights: {
     spot: { kelvin: 3200, intensity: 1, label: "Tungsten spotlight" },

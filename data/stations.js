@@ -3,9 +3,10 @@
 //
 //  mode       "guided" (steps), "challenge" (brief + criteria), "playground"
 //  group      floor section: one of SECTIONS below (learn / go-further /
-//             challenge / play / finish) — nothing gates a later section on
-//             an earlier one finishing; grouping is for homework chunking
-//             and page layout only, not a progression lock
+//             play / finish) — nothing gates a later section on an earlier
+//             one finishing; grouping is for homework chunking and page
+//             layout only, not a progression lock. It's independent of
+//             `mode`: Homework 2 holds both guided stations and challenges.
 //  scene      scene id (js/scenes); camera: camera id (data/cameras.js)
 //  start      starting settings (iso: or gainDb:, shutter: denominator …)
 //  controls   dials the student can use; locked: shown but not adjustable
@@ -33,7 +34,6 @@ import { checks } from "../js/lab/feedback.js";
 export const SECTIONS = [
   ["learn", "Homework 1 — Exposure Basics"],
   ["go-further", "Homework 2 — Go Further"],
-  ["challenge", "Challenges"],
   ["play", "Free play"],
   ["finish", "Finish"],
 ];
@@ -362,7 +362,7 @@ export const stations = [
   {
     id: "sensor",
     title: "Sensor Size",
-    purpose: "Full frame vs. crop vs. camcorder — same shot, different depth.",
+    purpose: "Full frame vs. crop vs. camcorder — same lens, different slice of the picture.",
     group: "go-further",
     accent: "#C3F584",
     mode: "guided",
@@ -370,34 +370,48 @@ export const stations = [
     camera: "ff",
     cameraChoice: true,
     start: { aperture: 2.8, iso: 800, shutter: 60, fps: 30, focus: 2.5, wb: 3200 },
-    controls: ["aperture"],
+    controls: ["aperture", "zoom"],
     tools: { available: ["dof", "meter", "hud"], on: ["dof", "hud"] },
-    intro: "Every camera here frames the shot the same way. Notice the on-screen display changes too.",
+    intro:
+      "A lens throws a circle of light out the back; the sensor records only the part of it that it covers. A smaller sensor covers less — so it keeps the middle and throws the rest away.",
     steps: [
       {
-        text: "Full-frame at f/2.8: the drummer is soft. Switch the camera to the <strong>Canon VIXIA HF G50</strong>.",
+        text: "Full-frame, 85mm, f/2.8: the singer is sharp and the drummer is soft. Leave the lens alone and switch the camera to the <strong>Canon VIXIA HF G50</strong>.",
         when: (c) => c.camera.id === "g50",
-        done: "Same framing and f-stop, tiny sensor → nearly everything is sharp.",
+        done: "The shot jumped way in — and nobody touched the zoom. The G50's 1/2.3-inch chip covers a much smaller patch of the same image circle, so it keeps the middle. That's <em>crop factor</em>: 5.6× on this body. (The sim's zoom stops at 3×, so it shortened the lens to keep the shot inside the scene — a real G50 at 85mm would be tighter still.)",
       },
       {
-        text: "Try the <strong>Sony FDR-AX100</strong> (1-inch sensor).",
-        when: (c) => c.camera.id === "ax100",
-        done: "In between. Its gain is in dB, and its ND switch reads ND1/ND2/ND3.",
+        text: "Comparing cameras only means something at the same framing. <strong>Zoom out to the wide end</strong> until the shot matches the full-frame one.",
+        hint: "The zoom dial reads the real millimetres on the barrel first, then what they'd be on full frame.",
+        when: (c) => c.derived.frameZoom <= 1.05,
+        notYet: (c) => `Still ${c.derived.frameZoom.toFixed(1)}× tighter than the full-frame shot — keep zooming out.`,
+        done: "Same framing, same f/2.8 — and now the drummer is sharp too. Matching that framing on a tiny sensor takes a ~15mm lens instead of an 85mm one, and short lenses have enormous depth of field. <em>That's</em> why camcorder footage looks like everything is in focus: not the sensor on its own, but the short lens a small sensor forces on you.",
       },
       {
-        text: "Now the <strong>Panasonic GH5</strong>, then back to <strong>Full-Frame</strong>.",
-        when: (c) => c.camera.id === "ff",
-        done: "Bigger sensor = shallower depth of field at the same framing and f-stop — part of the ‘cinematic’ look.",
+        text: "Now the <strong>Sony FDR-AX100</strong> (1-inch sensor), again matched to the same framing.",
+        when: (c) => c.camera.id === "ax100" && c.derived.frameZoom <= 1.05,
+        notYet: (c) =>
+          c.camera.id !== "ax100" ? "Switch the camera to the Sony FDR-AX100." : "Match the framing first — zoom back out to the wide end.",
+        done: "In between: a 2.7× crop, so roughly a 31mm lens for this shot, and a depth of field between the other two. Its gain reads in dB and its ND switch reads ND1/ND2/ND3.",
+      },
+      {
+        text: "Finish back on <strong>Full-Frame</strong>, same framing again, and look at the drummer. (The <strong>Panasonic GH5</strong>'s Micro Four Thirds sensor sits between the two — worth a look on the way.)",
+        when: (c) => c.camera.id === "ff" && c.derived.frameZoom <= 1.05,
+        notYet: (c) => (c.camera.id !== "ff" ? "Switch back to the Full-Frame Mirrorless." : "Zoom back out to the wide end to match the framing."),
+        done: "One shot, one f-stop, four sensor sizes. Two things move together: the bigger the sensor, the longer the lens you need for the same shot — and the shallower the depth of field that lens gives you. That's most of what people mean by the ‘cinematic’ look.",
       },
     ],
   },
 
-  // ---------------- challenges ----------------
+  // ------- homework 2, part two: challenges -------
+  // Same section as the guided stations above — learn the four topics, then
+  // apply the lot — these just run in challenge mode: a brief and
+  // range-based criteria instead of steps.
   {
     id: "low-light",
     title: "Low-Light Concert",
     purpose: "Noisy, smeary, soft. Fix the shot within the rules.",
-    group: "challenge",
+    group: "go-further",
     accent: "#FF6B9A",
     mode: "challenge",
     scene: "stage",
@@ -415,7 +429,7 @@ export const stations = [
     id: "bright-day",
     title: "Sunny Day, Soft Background",
     purpose: "Shallow focus in blazing sun — without breaking motion.",
-    group: "challenge",
+    group: "go-further",
     accent: "#FFD166",
     mode: "challenge",
     scene: "park",
@@ -433,7 +447,7 @@ export const stations = [
     id: "full-camera",
     title: "Full Camera: Everything's Wrong",
     purpose: "Someone left the camera on crazy settings. Diagnose and fix.",
-    group: "challenge",
+    group: "go-further",
     accent: "#7CE0FF",
     mode: "challenge",
     scene: "stage",
@@ -460,7 +474,7 @@ export const stations = [
     cameraChoice: true,
     sceneChoice: true,
     start: {},
-    controls: ["aperture", "shutter", "iso", "nd", "fps", "wb", "focus"],
+    controls: ["aperture", "shutter", "iso", "nd", "fps", "wb", "focus", "zoom"],
     tools: {
       available: ["meter", "histogram", "waveform", "zebras", "peaking", "magnify", "dof", "shutter", "hud"],
       on: ["meter", "hud"],

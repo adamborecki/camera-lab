@@ -9,7 +9,7 @@
 //  playground  free exploration; completes after some real fiddling.
 import { runChecks } from "./feedback.js";
 import { markComplete, recordChallenge, isComplete } from "../progress.js";
-import { gainOptions, formatDistance } from "../sim/camera-model.js";
+import { gainOptions, formatDistance, formatFocal } from "../sim/camera-model.js";
 
 export function createActivity(api) {
   const s = api.station;
@@ -131,6 +131,7 @@ function settingsSummary(ctx) {
   return {
     scene: scene.title,
     camera: camera.name,
+    lens: formatFocal(st.focal, camera),
     frameRate: `${st.fps} fps`,
     shutter: `1/${st.shutter}`,
     aperture: `f/${st.aperture}`,

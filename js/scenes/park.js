@@ -13,6 +13,7 @@ export const parkScene = {
   // Correct exposure (ISO 100) for a sunlit subject. "Sunny 16"-ish.
   ev100: 14,
   equivFocal: 70,
+  aim: [0.61, 0.36], // the person — see stageScene.aim
   defaults: { fps: 30, shutter: 60, aperture: 16, iso: 100, nd: 0, wb: 5600, focus: 3 },
   lights: {
     sun: { kelvin: 5600, intensity: 1, label: "Sunlight" },

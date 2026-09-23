@@ -110,6 +110,14 @@
   color: #0f1220;
 }
 
+/* Homework 2 mixes guided stations and challenges, so the challenges say so
+   on the card now that they've no section heading of their own. */
+.station-card .badge-challenge {
+  background: transparent;
+  color: var(--accent, var(--accent-default));
+  border: 1px solid currentColor;
+}
+
 .enter-hint {
   position: absolute;
   bottom: 1.25rem;

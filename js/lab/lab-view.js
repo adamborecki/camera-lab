@@ -16,7 +16,10 @@ import {
   fpsOptions,
   WB_RANGE,
   FOCUS_RANGE,
+  focalRange,
+  realFocal,
   formatDistance,
+  formatFocal,
 } from "../sim/camera-model.js";
 import { Dial } from "../ui/dial.js";
 import { Hud } from "../ui/hud.js";
@@ -50,6 +53,26 @@ const FOCUS_DIAL = {
   ticks: [0.5, 1, 2, 3, 5, 10, 20, 100].map((v) => ({ value: v, label: v === 100 ? "∞" : `${v}m`, major: true })),
 };
 
+// The lens. settings.focal is a 35mm-equivalent focal length, so the dial's
+// range is the same on every body — but it's marked in the real millimetres
+// engraved on that body's barrel, which is what changes with the sensor.
+const ZOOM_DIAL = (camera, scene) => {
+  const { min, max } = focalRange(scene);
+  const mm = (f) => Math.round(realFocal(f, camera));
+  return {
+    min,
+    max,
+    spacing: 12,
+    keyStep: 2,
+    toPos: (f) => Math.log2(f / min) * 24,
+    fromPos: (p) => min * 2 ** (p / 24),
+    format: (f) => formatFocal(f, camera),
+    ticks: [1, 1.25, 1.5, 2, 2.5, 3]
+      .filter((r) => r * min <= max + 0.01)
+      .map((r) => ({ value: r * min, label: `${mm(r * min)}mm`, tapeLabel: `${mm(r * min)}`, major: true })),
+  };
+};
+
 // Station control names → settings keys + how to build the dial.
 const CONTROLS = {
   aperture: { key: "aperture", label: () => "Aperture", options: apertureOptions },
@@ -59,8 +82,9 @@ const CONTROLS = {
   fps: { key: "fps", label: () => "Frame rate", options: fpsOptions },
   wb: { key: "wb", label: () => "White balance", continuous: WB_DIAL },
   focus: { key: "focus", label: () => "Focus", continuous: FOCUS_DIAL },
+  zoom: { key: "focal", label: () => "Zoom (lens)", continuous: ZOOM_DIAL },
 };
-const CONTROL_ORDER = ["aperture", "shutter", "iso", "nd", "fps", "wb", "focus"];
+const CONTROL_ORDER = ["aperture", "shutter", "iso", "nd", "fps", "wb", "focus", "zoom"];
 
 export function mountLab(container, station) {
   const debug = /[?&]debug/.test(location.search) || localStorage.getItem("cameralab.debug") === "1";
@@ -128,7 +152,7 @@ export function mountLab(container, station) {
   // scenes, start from the new scene's defaults instead.
   function resetSettings(extra = {}) {
     const start = scene.id === station.scene ? station.start : {};
-    settings = normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start, ...extra }), camera);
+    settings = normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start, ...extra }, scene), camera, scene);
     derived = derive(settings, camera, scene);
   }
   resetSettings();
@@ -181,10 +205,11 @@ export function mountLab(container, station) {
         controlsEl.appendChild(note);
         continue;
       }
+      const continuous = typeof def.continuous === "function" ? def.continuous(camera, scene) : def.continuous;
       const dial = new Dial({
         label: def.label(camera),
-        options: def.continuous ? null : def.options(camera),
-        ...(def.continuous || {}),
+        options: continuous ? null : def.options(camera),
+        ...(continuous || {}),
         value: settings[def.key],
         locked: locked.has(name),
         onChange: (v) => {
@@ -308,13 +333,30 @@ export function mountLab(container, station) {
   }
 
   function setCamera(id) {
+    const prev = camera;
+    const prevD = derived;
     camera = getCamera(id);
-    settings = normalizeSettings(settings, camera);
+    // Swapping bodies keeps the same physical lens, so a smaller sensor —
+    // covering only the middle of the image that lens throws — frames
+    // tighter by the crop factor. That's the crop-factor zoom, and the
+    // student zooms back out to compare like for like. Stations that don't
+    // give them a zoom control keep the framing instead, so a camera switch
+    // can't strand them in a shot they can't undo.
+    const canZoom = (station.controls || []).includes("zoom") && !locked.has("zoom");
+    const focal = canZoom ? settings.focal * (camera.sensor.crop / prev.sensor.crop) : settings.focal;
+    settings = normalizeSettings({ ...settings, focal }, camera, scene);
     derived = derive(settings, camera, scene);
     buildControls();
     buildPickers();
     dirty = true;
-    feedEl.textContent = `${camera.name} — ${camera.blurb}`;
+    const tighter = derived.frameZoom > prevD.frameZoom * 1.01;
+    const wider = derived.frameZoom < prevD.frameZoom * 0.99;
+    const framing = tighter
+      ? ` Same lens, smaller sensor: it only covers the middle of the picture the lens throws, so the shot is tighter — now ${formatFocal(settings.focal, camera)}. Zoom out to match the old framing.`
+      : wider
+        ? ` Bigger sensor, same lens: it sees more of the picture the lens throws, so the shot is wider — now ${formatFocal(settings.focal, camera)}.`
+        : "";
+    feedEl.textContent = `${camera.name} — ${camera.blurb}${framing}`;
     interaction();
     activity.onChange("camera");
   }
@@ -372,15 +414,29 @@ export function mountLab(container, station) {
     if (done) feedEl.textContent = `Focused on ${name.toLowerCase()} at ${formatDistance(f)}.`;
   }
 
-  // ---------- magnify ----------
+  // ---------- framing & magnify ----------
+  // Two zooms stack into one view: the optical one (this lens on this
+  // sensor — derived.frameZoom, how far into the drawn scene the sensor
+  // actually sees) and the magnify tool's 3× focus check on top of it.
   let magCenter = { x: 0.65, y: 0.35 };
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   function currentView() {
-    if (!toolsOn.has("magnify")) return { x: 0.5, y: 0.5, zoom: 1 };
-    const zoom = 3;
-    const half = 0.5 / zoom;
+    // A tighter shot is aimed at the scene's subject, the way an operator
+    // recomposes as they zoom; the clamp keeps the frame inside the drawn
+    // scene, which at the widest framing leaves it centered with no choice.
+    const frame = derived.frameZoom;
+    const half = 0.5 / frame;
+    const [aimX, aimY] = scene.aim || [0.5, 0.5];
+    const fx = clamp(aimX, half, 1 - half);
+    const fy = clamp(aimY, half, 1 - half);
+    if (!toolsOn.has("magnify")) return { x: fx, y: fy, zoom: frame };
+    // Magnify punches into the shot the camera is actually taking, so its
+    // window stays inside that frame rather than the whole scene.
+    const zoom = frame * 3;
+    const h = 0.5 / zoom;
     return {
-      x: Math.min(1 - half, Math.max(half, magCenter.x)),
-      y: Math.min(1 - half, Math.max(half, magCenter.y)),
+      x: clamp(magCenter.x, fx - half + h, fx + half - h),
+      y: clamp(magCenter.y, fy - half + h, fy + half - h),
       zoom,
     };
   }
@@ -478,7 +534,7 @@ export function mountLab(container, station) {
     setCamera: (id) => setCamera(id),
     apply: (partial) => {
       for (const [k, v] of Object.entries(partial)) change(k, v, { silent: true });
-      settings = normalizeSettings(settings, camera);
+      settings = normalizeSettings(settings, camera, scene);
       derived = derive(settings, camera, scene);
       buildControls();
     },
