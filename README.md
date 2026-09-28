@@ -1,3 +1,8 @@
+Check it out live!
+
+https://adamborecki.github.io/camera-lab
+
+
 # Camera Lab
 
 A museum-floor-style **video camera simulator** for learning exposure, motion, focus and color — sibling of Sound Lab. Static HTML/CSS/JS (ES modules + WebGL2), no build step, no backend. Works on phones and laptops.
