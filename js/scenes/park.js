@@ -23,8 +23,8 @@ export const parkScene = {
   subjects: {
     person: { label: "the person", depth: 3 },
     pinwheel: { label: "the pinwheel", depth: 2.8 },
-    flowers: { label: "the flowers", depth: 1.0 },
-    trees: { label: "the trees", depth: 25 },
+    flowers: { label: "the flowers", plural: true, depth: 1.0 },
+    trees: { label: "the trees", plural: true, depth: 25 },
   },
   layers: [
     {

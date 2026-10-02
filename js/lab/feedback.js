@@ -69,14 +69,17 @@ const subject = (scene, key) => scene.subjects[key];
 const sharp = (d, depth) => depth >= d.dofNear * 0.98 && depth <= d.dofFar * 1.02;
 
 export const checks = {
-  exposure(lo = -0.7, hi = 0.7) {
+  // tips: optional { bright, dark } — a station-specific nudge appended when
+  // the shot is off, e.g. pointing at the one control the challenge is about.
+  exposure(lo = -0.7, hi = 0.7, tips = {}) {
     return {
       label: `Exposure within ${formatStops(lo)} to ${formatStops(hi)} stops`,
       test: ({ derived }) => {
         const e = derived.exposureStops;
+        const off = (word, tip) => `${word} (${formatStops(e)} ${stopWord(e)}).${tip ? ` ${tip}` : ""}`;
         return {
           pass: within(e, lo, hi),
-          detail: e > hi ? `Too bright (${formatStops(e)} ${stopWord(e)}).` : e < lo ? `Too dark (${formatStops(e)} ${stopWord(e)}).` : `Exposure ${formatStops(e)} — good.`,
+          detail: e > hi ? off("Too bright", tips.bright) : e < lo ? off("Too dark", tips.dark) : `Exposure ${formatStops(e)} — good.`,
         };
       },
     };
@@ -127,7 +130,7 @@ export const checks = {
       test: ({ derived, scene }) => {
         const s = subject(scene, key);
         const ok = sharp(derived, s.depth);
-        return { pass: ok, detail: ok ? `${cap(s.label)} is sharp.` : `${cap(s.label)} is out of focus.` };
+        return { pass: ok, detail: ok ? `${cap(s.label)} ${is(s)} sharp.` : `${cap(s.label)} ${is(s)} out of focus.` };
       },
     };
   },
@@ -137,7 +140,13 @@ export const checks = {
       test: ({ derived, scene }) => {
         const s = subject(scene, key);
         const px = derived.blurPxAt(s.depth);
-        return { pass: px >= minPx, detail: px >= minPx ? `${cap(s.label)} is nicely soft.` : `${cap(s.label)} is still fairly sharp — open up or focus closer.` };
+        return {
+          pass: px >= minPx,
+          detail:
+            px >= minPx
+              ? `${cap(s.label)} ${is(s)} nicely soft.`
+              : `${cap(s.label)} ${is(s)} still fairly sharp — open the aperture wider (a lower f-number like f/2.8) for shallower depth of field.`,
+        };
       },
     };
   },
@@ -172,6 +181,8 @@ export const checks = {
     };
   },
 };
+
+const is = (s) => (s.plural ? "are" : "is");
 
 export function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);

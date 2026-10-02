@@ -233,6 +233,10 @@ export function mountLab(container, station) {
         b.className = "control-tab";
         b.setAttribute("role", "tab");
         b.dataset.control = name;
+        // Built once; updateTabLabels() only touches the text. Rewriting the
+        // button's innerHTML every frame swapped out the element under the
+        // pointer mid-press, so presses on the label text never clicked.
+        b.innerHTML = `<span></span><strong></strong>`;
         b.addEventListener("click", () => {
           activeTab = name;
           syncTabs();
@@ -261,9 +265,14 @@ export function mountLab(container, station) {
       const name = b.dataset.control;
       const def = CONTROLS[name];
       const d = dials[def.key];
-      const value = d ? d.label(settings[def.key]) : "—";
-      b.innerHTML = `<span>${def.label(camera)}</span><strong>${value}</strong>${locked.has(name) ? " 🔒" : ""}`;
+      const value = (d ? d.label(settings[def.key]) : "—") + (locked.has(name) ? " 🔒" : "");
+      setText(b.querySelector("span"), def.label(camera));
+      setText(b.querySelector("strong"), value);
     });
+  }
+
+  function setText(el, text) {
+    if (el.textContent !== text) el.textContent = text;
   }
 
   // ---------- tools ----------

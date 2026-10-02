@@ -441,7 +441,14 @@ export const stations = [
     tools: { available: ["histogram", "zebras", "dof", "hud"], on: ["hud"] },
     brief: "A client wants the person sharp against soft, blurry trees. It's a bright sunny day and you're shooting 30p.",
     goals: ["Person sharp", "Trees soft", "Natural-looking motion", "Good exposure"],
-    criteria: [checks.inFocus("person"), checks.blurred("trees", 6), checks.shutterAngle(120, 250), checks.exposure(-0.7, 0.7)],
+    criteria: [
+      checks.inFocus("person"),
+      checks.blurred("trees", 6),
+      checks.shutterAngle(120, 250),
+      checks.exposure(-0.7, 0.7, {
+        bright: "Closing the aperture or speeding up the shutter would undo the soft trees or the natural motion — tap the <strong>ND filter</strong> tab and add ND instead. It cuts light and changes nothing else.",
+      }),
+    ],
   },
   {
     id: "full-camera",
