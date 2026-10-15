@@ -71,7 +71,11 @@ test("every single-camera challenge can be passed on every camera it offers", ()
 });
 
 // Multi-camera challenges: a known-good answer passes every criterion.
+const MUSCO_HOUSE = { aperture: 5.6, gainDb: 0, wb: 3200, wbMode: "indoor", rGain: 0, bGain: 0, rPed: 0, bPed: 0, mPed: 0, auto: { focus: true } };
 const ANSWERS = {
+  "warmup-salmon-numbers": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbMode: "temp", wbAB: 5, wbGM: 2, auto: { focus: true } } },
+  "warmup-lock-it-down": { A: { aperture: 2.8, gainDb: 6, shutter: 60, wb: 3200, wbMode: "temp", auto: { focus: true } } },
+  "musco-shade-all": { 1: MUSCO_HOUSE, 2: MUSCO_HOUSE, 4: MUSCO_HOUSE, 5: MUSCO_HOUSE },
   "match-two-ax100": { B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", nd: 0, auto: { focus: true } } },
   "match-rovocam": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbAB: 5, wbGM: 2, auto: { focus: true } } },
   "sgk-gig": {
@@ -90,7 +94,7 @@ test("multi-camera challenges have a passing answer", () => {
       const a = answer[d.id];
       rigs[d.id] = rig(s.scene, d.camera, { ...d.start, ...(a || {}), auto: a?.auto ?? d.start.auto }, { ...d, recording: a?.recording });
     }
-    const active = s.rigs.find((d) => !d.reference).id;
+    const active = s.rigs.find((d) => !d.reference && !d.readOnly).id;
     const failed = allPass(s.criteria, ctxFor(rigs, active));
     assert.deepEqual(failed.map((f) => f.detail), [], `${s.id}`);
   }
@@ -169,4 +173,24 @@ test("AX100 white-balance step judges what the camera applies, not the dial", ()
   assert.equal(at({ wbMode: "indoor", wb: 5600 }), true, "Indoor is 3200K");
   assert.equal(at({ wbMode: "temp", wb: 3200 }), true);
   assert.equal(at({ wbMode: "temp", wb: 3200, wbAB: 2 }), false, "no shift");
+});
+
+test("Musco brightest cue: fixable under work lights, and the house defaults are right under the concert cue", () => {
+  const s = stations.find((x) => x.id === "musco-brightest-cue");
+  const d = s.rigs[0];
+  const pre = rig("musco-preshow", "ue150", { ...d.start, aperture: 2.8, gainDb: 6 }, d);
+  assert.ok(Math.abs(pre.derived.exposureStops) <= 0.5, `preshow fix: ${pre.derived.exposureStops}`);
+  const concert = rig("musco-concert", "ue150", d.start, d);
+  assert.ok(Math.abs(concert.derived.exposureStops) <= 0.1, `house defaults under the concert cue: ${concert.derived.exposureStops}`);
+});
+
+test("Musco shading: a camera off by B PED −8 doesn't match; at house defaults it does", () => {
+  const s = stations.find((x) => x.id === "musco-shade-all");
+  const ref = s.rigs.find((d) => d.id === "3");
+  const one = s.rigs.find((d) => d.id === "1");
+  const R = rig(s.scene, "ue150", ref.start, ref);
+  const bad = rig(s.scene, "ue150", one.start, one);
+  assert.equal(checks.blacksMatch("3", { rig: "1" }).test(ctxFor({ 3: R, 1: bad }, "1")).pass, false);
+  const good = rig(s.scene, "ue150", { ...one.start, ...MUSCO_HOUSE }, one);
+  assert.equal(checks.blacksMatch("3", { rig: "1" }).test(ctxFor({ 3: R, 1: good }, "1")).pass, true);
 });

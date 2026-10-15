@@ -93,6 +93,7 @@ uniform float uShotK;
 uniform float uReadSigma;
 uniform uint uFrame;
 uniform int uNoiseOn;
+uniform vec3 uPedestal;   // black-level offset, display-linear, per channel
 const float PI = 3.14159265;
 const float SAT = ${SENSOR_SAT.toFixed(3)};
 const vec2 SCENE = vec2(${SCENE_W}.0, ${SCENE_H}.0);
@@ -181,6 +182,9 @@ void main() {
   // way real cameras desaturate blown highlights.
   x = mix(x, vec3(max(x.r, max(x.g, x.b))), clipK);
   vec3 y = vec3(tone(x.r), tone(x.g), tone(x.b));
+  // Pedestal (black level) sits on top of the whole picture: it lifts or
+  // sinks the blacks, and barely touches the highlights.
+  y = max(y + uPedestal * (1.0 - 0.6 * y), 0.0);
   outColor = vec4(oetf(y.r), oetf(y.g), oetf(y.b), 1.0);
 }`;
 
@@ -541,6 +545,7 @@ export class Renderer {
     gl.uniform1f(P.u("uReadSigma"), derived.readSigma);
     gl.uniform1ui(P.u("uFrame"), (opts.frameIndex >>> 0) % 1000003);
     gl.uniform1i(P.u("uNoiseOn"), opts.noise === false ? 0 : 1);
+    gl.uniform3fv(P.u("uPedestal"), derived.pedestal || [0, 0, 0]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // ---- scopes read the un-overlaid frame ----

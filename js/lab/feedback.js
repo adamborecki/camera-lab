@@ -14,6 +14,7 @@ import {
   gainOptions,
   renderedWhite,
   colorMatch,
+  blackMatch,
   effectiveWb,
 } from "../sim/camera-model.js";
 
@@ -344,6 +345,53 @@ Object.assign(checks, {
         if (!inside) return { pass: false, detail: "Too tight — someone (standing for a bow) would be cut off. Zoom out a little." };
         if (fill < minFill && !maxed) return { pass: false, detail: `Lots of empty space — the group only fills ${Math.round(fill * 100)}% of the frame. Zoom in until it's snug, leaving room to stand.` };
         return { pass: true, detail: "Snug, with room for bows." };
+      },
+    };
+  },
+});
+
+// ---------- shading (Musco PTZ cameras on the RP150) ----------
+Object.assign(checks, {
+  // Blacks the same as the reference camera (pedestal).
+  blacksMatch(refId, { rig, tol = 0.004 } = {}) {
+    return {
+      label: `Blacks match ${refId}`,
+      test: (ctx) => {
+        const m = blackMatch(rigOf(ctx, refId).settings, rigOf(ctx, rig).settings);
+        return {
+          pass: m.worst <= tol,
+          detail: m.worst <= tol ? "Blacks match." : `${cap(rigName(ctx, rig))}'s blacks look ${m.words.join(" and ") || "different"} next to ${rigName(ctx, refId)} — that's pedestal.`,
+        };
+      },
+    };
+  },
+  // The static wide is the reference: nobody changes it.
+  untouched(rigId) {
+    const keys = ["aperture", "gainStops", "shutter", "wb", "wbMode", "rGain", "bGain", "rPed", "bPed", "mPed", "focal"];
+    return {
+      label: `Camera ${rigId} untouched`,
+      test: (ctx) => {
+        const r = ctx.rigs?.[rigId];
+        const start = r?.start;
+        if (!r || !start) return { pass: true, detail: "" };
+        const changed = keys.filter((k) => (typeof start[k] === "number" ? Math.abs(start[k] - r.settings[k]) > 1e-6 : start[k] !== r.settings[k]));
+        return { pass: !changed.length, detail: changed.length ? `Camera ${rigId} (the static wide) was changed — it's the safe shot; never touch it.` : `Camera ${rigId} untouched.` };
+      },
+    };
+  },
+  // Musco's house defaults on a UE150: F5.6 · 0 dB · A/3200K · shading at 0.
+  muscoHouse({ rig } = {}) {
+    return {
+      label: "House defaults (F5.6 · 0 dB · A/3200K · R/B gain & pedestal 0)",
+      test: (ctx) => {
+        const s = rigOf(ctx, rig).settings;
+        const off = [];
+        if (Math.abs(s.aperture - 5.6) > 0.01) off.push(`iris F${s.aperture.toFixed(1)}`);
+        if (Math.abs(s.gainStops) > 0.01) off.push("gain not 0 dB");
+        if (s.wbMode !== "indoor") off.push(s.wbMode === "outdoor" ? "B/5600K" : s.wbMode === "auto" ? "ATW" : "white balance not A/3200K");
+        for (const [k, n] of [["rGain", "R gain"], ["bGain", "B gain"], ["rPed", "R ped"], ["bPed", "B ped"], ["mPed", "M ped"]]) if (s[k]) off.push(`${n} ${s[k] > 0 ? "+" : ""}${s[k]}`);
+        if (s.auto?.aperture) off.push("iris on AUTO");
+        return { pass: !off.length, detail: off.length ? `${cap(rigName(ctx, rig))}: ${off.join(", ")}.` : "At house defaults." };
       },
     };
   },

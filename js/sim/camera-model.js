@@ -192,6 +192,15 @@ export function normalizeSettings(s, camera, scene) {
   out.wbGM = sh ? Math.max(-sh.gm, Math.min(sh.gm, Math.round(s.wbGM || 0))) : 0;
   out.wbMode = s.wbMode || "temp";
   out.auto = { ...(s.auto || {}) };
+  // Broadcast-style shading (PTZ bodies on a remote controller): R/B gain
+  // trims color in the highlights, R/B/master pedestal trims black level.
+  const shade = camera.shading;
+  const clampI = (v, m) => Math.max(-m, Math.min(m, Math.round(v || 0)));
+  out.rGain = shade ? clampI(s.rGain, shade.gain) : 0;
+  out.bGain = shade ? clampI(s.bGain, shade.gain) : 0;
+  out.rPed = shade ? clampI(s.rPed, shade.ped) : 0;
+  out.bPed = shade ? clampI(s.bPed, shade.ped) : 0;
+  out.mPed = shade ? clampI(s.mPed, shade.ped) : 0;
   return out;
 }
 
@@ -212,8 +221,21 @@ export function settingsFromPreset(p, scene) {
     wbGM: p.wbGM ?? 0,
     wbMode: p.wbMode ?? "temp",
     auto: { ...(p.auto || {}) },
+    rGain: p.rGain ?? 0,
+    bGain: p.bGain ?? 0,
+    rPed: p.rPed ?? 0,
+    bPed: p.bPed ?? 0,
+    mPed: p.mPed ?? 0,
   };
 }
+
+// Shading units. Panasonic's controller shows R/B gain and pedestal as
+// plain integers around 0; the real step sizes aren't published in what
+// we've found, so these are teaching values: big enough that a camera a few
+// steps off is visible next to its neighbor on the multiview, the way it is
+// in the booth. (README → Technical verification.)
+export const RB_GAIN_STEP = 0.0015; // ±1 = ±0.15% red or blue in the highlights
+export const PED_STEP = 0.0015; // ±1 = ±0.15% of full scale (display-linear) added to black
 
 // ---------- white balance ----------
 //
@@ -250,7 +272,15 @@ export function wbGainsFor(s, camera, scene) {
   const g = whiteBalanceGains(1e6 / Math.max(40, Math.min(600, mired)));
   const green = 1 + wb.gm * WB_GM_STEP;
   const bias = camera.colorBias || [1, 1, 1];
-  return [g[0] * bias[0], g[1] * green * bias[1], g[2] * bias[2]];
+  const r = 1 + (s.rGain || 0) * RB_GAIN_STEP;
+  const b = 1 + (s.bGain || 0) * RB_GAIN_STEP;
+  return [g[0] * bias[0] * r, g[1] * green * bias[1], g[2] * bias[2] * b];
+}
+
+// Black-level offsets (display-referred, 0–1), per channel.
+export function pedestalOf(s) {
+  const m = s.mPed || 0;
+  return [(m + (s.rPed || 0)) * PED_STEP, m * PED_STEP, (m + (s.bPed || 0)) * PED_STEP];
 }
 
 // How a white object under the scene's key light comes out, as log chroma
@@ -270,6 +300,23 @@ export function renderedWhite(s, camera, scene) {
 // Color distance between two renders, in the same log units. About 0.02 is
 // where two monitors side by side start to look "the same"; 0.1 is an
 // obvious cast. Also returns which way B is off from A, in words.
+// How far apart two cameras' blacks are (display units, worst channel), and
+// which way B's blacks lean.
+export function blackMatch(sa, sb) {
+  const a = pedestalOf(sa);
+  const b = pedestalOf(sb);
+  const d = b.map((v, i) => v - a[i]);
+  const worst = Math.max(...d.map(Math.abs));
+  const words = [];
+  const avg = (d[0] + d[1] + d[2]) / 3;
+  if (Math.abs(avg) > 0.004) words.push(avg > 0 ? "lifted (gray-looking blacks)" : "crushed (deeper blacks)");
+  if (d[0] - avg > 0.004) words.push("red in the blacks");
+  if (d[2] - avg > 0.004) words.push("blue in the blacks");
+  if (avg - d[2] > 0.004 && d[0] - avg <= 0.004) words.push("yellow in the blacks");
+  if (avg - d[0] > 0.004 && d[2] - avg <= 0.004) words.push("cyan in the blacks");
+  return { worst, d, words };
+}
+
 export function colorMatch(a, b) {
   const dr = b.rg - a.rg;
   const db = b.bg - a.bg;
@@ -365,6 +412,7 @@ export function derive(s, camera, scene) {
     readSigma,
     midNoisePct,
     wbGains: wbGainsFor(s, camera, scene),
+    pedestal: pedestalOf(s),
     maxAperture: maxApertureAt(camera, s.focal),
   };
 }

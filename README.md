@@ -18,8 +18,9 @@ Stations are grouped into weekly homeworks (the `SECTIONS` in `data/stations.js`
 | Homework 1 — Exposure Basics | aperture, shutter, ISO/gain, frame rate, the exposure triangle |
 | Homework 2 — Go Further | white balance, ND, focus & depth of field, sensor size, three challenges |
 | Homework 3 — Standard Gear Kit & Salmon | warm-ups on a random body (spaced retrieval of HW1–2), the AX100's real controls and traps, framing a static wide, matching cameras (AX100↔AX100, GH5→AX100, AX100→RovoCam), the Salmon livestream, a two-camera gig challenge |
+| Homework 4 — Musco: Many Cameras, One Look | warm-ups from HW3; one RP150 controller for five UE150 PTZs on a multiview; reading the controller's screen against the house defaults; R/B gain vs gain; setting exposure under the brightest cue (not work lights); shading four cameras to match the static wide |
 
-Planned next (not built): Musco — Panasonic PTZ cameras on the RP150 controller, shading (iris, gain, R/B gain, pedestal) across 4–6 cameras, the ATEM Constellation with program/preview/ISOs and calling shots. Pedagogy notes and the arc are in [`docs/COURSE_PLAN.md`](docs/COURSE_PLAN.md).
+Planned next (not built): PTZ operation (joystick, zoom, focus, taking a call), switching on the ATEM Constellation (program/preview, calling shots, ISOs), and a Musco capstone. Pedagogy notes and the arc are in [`docs/COURSE_PLAN.md`](docs/COURSE_PLAN.md).
 
 ## Running locally
 
@@ -73,7 +74,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 
 ### Camera bodies with their real controls
 
-`bodyControls: true` on a station swaps the generic dials for a replica of the body when it's an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen (tap to select, tap again to hand back to auto), the side buttons, the MANUAL ring, the MANUAL button (all three to auto — the trap), WB menu with Color Temp and A–B / G–M shift, ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
+`bodyControls: true` on a station swaps the generic dials for a replica of the body. For Musco's UE150s it's the **Panasonic AW-RP150 controller** (`js/ui/rp150-panel.js`, after the booth photo): camera selection buttons that switch which camera you control, the screen (iris/zoom/focus bars, R/B gain and pedestal values, gain, color temp), A/3200K · B/5600K · ATW · AWB, knobs for R/B GAIN, R/B PED, M.PED, IRIS (+ AUTO) and gain on F1, the zoom lever and FOCUS AUTO. A rig marked `readOnly` (Camera 3, the static wide) can be selected to read, never changed. For an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen (tap to select, tap again to hand back to auto), the side buttons, the MANUAL ring, the MANUAL button (all three to auto — the trap), WB menu with Color Temp and A–B / G–M shift, ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
 
 ## Adding things
 
@@ -91,6 +92,7 @@ Spec-sheet values where they exist; teaching values otherwise. Relationships (st
 - **Sony FDR-AX100** — 1.0-type sensor (2.7× crop); lens 29–348 mm equivalent, F2.8 wide → F4.5 tele, iris to F11 (Sony spec sheet); ND switch OFF / 1 / 2 / 3 ≈ 1/4, 1/16, 1/64 (2, 4, 6 stops); gain in dB.
 - **Canon VIXIA HF G50** — 1/2.3-type (5.6× crop); lens 29.3–601 mm equivalent in UHD 4K, f/1.8 wide → f/2.8 tele (Canon spec sheet); gain 0–24 dB; built-in ND treated as automatic-only.
 - **Panasonic GH5** — Micro Four Thirds (2×); wears the department's Lumix G Vario 14–140 mm f/3.5–5.6 (28–280 mm eq.); ISO from 200; screw-on ND.
+- **Panasonic AW-UE150** (Musco PTZs) — 1-type MOS (2.7×), 20× zoom, 8.8–176 mm = 24.5–490 mm eq., F2.8–4.5, gain to 42 dB (retail spec listings). Shading: R/B gain and R/B/master pedestal, 0 = house default.
 - **AJA RovoCam** (Salmon, reference only) — Sony FCB-ER8300 block, 1/2.3-type, F1.8 (AJA spec sheet); runs on auto white balance in Salmon.
 - Generic **Camera Lab S35** and **Full-Frame Mirrorless** bodies have no lens limits.
 - The sim's zoom stops at 3× (3.5× in the halls) because of the 1280 px scene images.
@@ -106,6 +108,7 @@ Not yet checked on the real gear — confirm before treating as instructions:
 - Salmon's AWB result (`scene.awb` = 3800K A5 G2) encodes the instructor's observation that an AX100 at those numbers matches the RovoCam — not a measurement.
 - Each body's `colorBias` is illustrative, not measured.
 - Salmon livestream: the multiview layout beyond the booth photo, Camera 1 vs 2 assignment, and the Production Studio 4K → Mini Extreme ISO chain.
+- Musco: the camera map (sim: 1 flutes house left, 2 balcony wide, 3 static wide, 4 brass house left, 5 horns & percussion house right — only "3 is the static wide" is confirmed); RP150 knob ranges and step sizes (sim: ±200; R/B gain step 0.15% of the channel, pedestal step 0.15% of full scale — teaching values); gain on F1; what holding A/3200K does; the stage's real color temperature and the pre-show work lights (sim: 3200K concert, ~4300K work lights about 2⅓ stops darker).
 
 ## Finish & Canvas
 

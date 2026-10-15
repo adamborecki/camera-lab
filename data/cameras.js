@@ -175,7 +175,30 @@ export const rovocam = {
   hidden: true,
 };
 
-export const allCameras = [...cameras, rovocam];
+// Musco Center's PTZ cameras, run from a Panasonic AW-RP150 controller in the
+// booth (js/ui/rp150-panel.js). Specs from Panasonic retail listings: 1-type
+// 4K MOS sensor, 20× zoom, 8.8–176 mm = 24.5–490 mm equivalent, F2.8–4.5,
+// gain to 42 dB. `shading` = the controller's R/B gain and pedestal ranges
+// (unverified — teaching values).
+export const ue150 = {
+  id: "ue150",
+  name: "Panasonic AW-UE150",
+  blurb: "Musco's PTZ cameras: 1-inch sensor, 20× zoom, shaded from the RP150 controller.",
+  sensor: { name: '1.0" type', crop: 2.7, fullWell: 8000, readNoise: 3 },
+  aperture: { min: 2.8, max: 11 },
+  lens: { name: "20× zoom", wide: 24.5, tele: 490, apWide: 2.8, apTele: 4.5 },
+  gain: { mode: "db", baseIso: 100, step: 3, max: 42 },
+  shutters: [60, 100, 120, 250, 500, 1000, 2000],
+  shutterDisplay: "fraction",
+  fps: [30, 60],
+  nd: { kind: "none", steps: [{ stops: 0, label: "OFF" }] },
+  shading: { gain: 200, ped: 200 },
+  colorBias: [1, 1, 1],
+  hud: "clean",
+  hidden: true,
+};
+
+export const allCameras = [...cameras, rovocam, ue150];
 
 export function getCamera(id) {
   return allCameras.find((c) => c.id === id) || cameras[0];

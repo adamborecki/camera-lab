@@ -33,6 +33,7 @@ import { aeStep, anyAutoExposure, cameraMeter } from "../sim/auto-exposure.js";
 import { Dial } from "../ui/dial.js";
 import { Hud } from "../ui/hud.js";
 import { Ax100Panel } from "../ui/ax100-panel.js";
+import { Rp150Panel } from "../ui/rp150-panel.js";
 import { ToolPanels, TOOL_INFO, scopeStats } from "../ui/tools.js";
 import { describeChange } from "./feedback.js";
 import { createActivity } from "./activity.js";
@@ -204,6 +205,7 @@ export function mountLab(container, station) {
   function resetSettings(extra = {}) {
     for (const rig of rigs) {
       rig.settings = normalizeSettings({ ...rigStart(rig), ...extra }, rig.camera, scene);
+      rig.start = rig.settings;
       rig.derived = derive(rig.settings, rig.camera, scene);
     }
     loadActive();
@@ -236,6 +238,10 @@ export function mountLab(container, station) {
 
   // The student (or the AX100 panel) changed something on the active rig.
   function change(key, value, { fromDial = false, silent = false, fromRing = false } = {}) {
+    if (rigs[active].def.readOnly && !silent) {
+      feedEl.textContent = `${rigs[active].label || rigs[active].id} is the static wide — look, don't touch.`;
+      return;
+    }
     const prev = settings;
     const prevD = derived;
     let next = { ...settings, [key]: value };
@@ -280,7 +286,7 @@ export function mountLab(container, station) {
   let activeTab = null;
   let bodyPanel = null;
   function usesBody() {
-    return !!station.bodyControls && camera.id === "ax100" && !rigs[active].def.reference;
+    return !!station.bodyControls && (camera.id === "ax100" || camera.id === "ue150") && !rigs[active].def.reference;
   }
   function buildControls() {
     Object.values(dials).forEach((d) => d.destroy());
@@ -296,6 +302,25 @@ export function mountLab(container, station) {
     hint.hidden = !canFocus();
     if (rigs[active].def.reference) {
       controlsEl.innerHTML = `<p class="control-note">This camera isn't yours to change — it's the one to match.</p>`;
+      return;
+    }
+    if (usesBody() && camera.id === "ue150") {
+      bodyPanel = new Rp150Panel({
+        camera,
+        scene,
+        get: () => settings,
+        change: (k, v, o) => change(k, v, o),
+        setAuto,
+        note: (k) => activity.onChange(k),
+        say: (t) => (feedEl.textContent = t),
+        oneShotWhite: () => keyLight(scene).kelvin,
+        rigs: rigs.map((r) => ({ id: r.id, label: r.label, readOnly: !!r.def.readOnly })),
+        active,
+        select: (i) => setActiveRig(i),
+        panelEl: controlsEl,
+      });
+      hud.setVisible(false);
+      hint.hidden = true;
       return;
     }
     if (usesBody()) {
@@ -411,6 +436,7 @@ export function mountLab(container, station) {
     wall.hidden = false;
     wall.innerHTML = "";
     wall.style.setProperty("--tiles", String(Math.min(rigs.length, 3)));
+    wall.classList.toggle("many", rigs.length > 2);
     rigs.forEach((rig, i) => {
       const tile = document.createElement("figure");
       tile.className = "monitor-tile";
@@ -446,7 +472,9 @@ export function mountLab(container, station) {
 
   function buildRigTabs() {
     const editable = rigs.map((r, i) => [r, i]).filter(([r]) => !r.def.reference);
-    rigTabsEl.hidden = editable.length < 2;
+    // The RP150 has its own camera buttons; tabs would just repeat them.
+    const controller = station.bodyControls && rigs.every((r) => r.camera.id === "ue150");
+    rigTabsEl.hidden = editable.length < 2 || controller;
     rigTabsEl.innerHTML = "";
     for (const [r, i] of editable) {
       const b = document.createElement("button");
@@ -583,9 +611,24 @@ export function mountLab(container, station) {
     activity.onChange("camera");
   }
 
-  function setScene(id, extraSettings) {
+  // keepSettings: the lights change but nobody touched the cameras (e.g.
+  // the concert cue coming up after pre-show) — every rig keeps its settings.
+  function setScene(id, extraSettings, keepSettings = false) {
     scene = getScene(id);
     renderer.setScene(scene);
+    if (keepSettings) {
+      saveActive();
+      for (const rig of rigs) {
+        rig.settings = normalizeSettings(rig.settings, rig.camera, scene);
+        rig.derived = derive(rig.settings, rig.camera, scene);
+      }
+      loadActive();
+      buildControls();
+      buildPickers();
+      dirty = true;
+      activity.onChange("scene");
+      return;
+    }
     const keep = { fps: settings.fps };
     resetSettings({ ...keep, ...(extraSettings || {}) });
     buildControls();
@@ -843,7 +886,7 @@ export function mountLab(container, station) {
     rigs.forEach((r, i) => {
       const s = i === active ? settings : r.settings;
       const d = i === active ? derived : r.derived;
-      out[r.id] = { settings: s, derived: d, camera: i === active ? camera : r.camera, stats: r.stats, meter: r.meter, view: frameView({ ...r, derived: d }), def: r.def, recording: r.recording };
+      out[r.id] = { settings: s, derived: d, camera: i === active ? camera : r.camera, stats: r.stats, meter: r.meter, view: frameView({ ...r, derived: d }), def: r.def, recording: r.recording, start: r.start };
     });
     return out;
   }
@@ -868,7 +911,7 @@ export function mountLab(container, station) {
         dirty = true;
         statWaiters.push(resolve);
       }),
-    setScene: (id, extra) => setScene(id, extra),
+    setScene: (id, extra, keep) => setScene(id, extra, keep),
     setCamera: (id) => setCamera(id),
     apply: (partial) => {
       const set = partial.aperture != null ? { apertureSet: partial.aperture } : {};

@@ -388,6 +388,42 @@ export const INSTRUMENTS = {
     limb(ctx, look.top, 0.085 * k, [[fx - 0.2 * k, shoulderY + 0.05 * k], [fx - 0.22 * k, shoulderY + 0.35 * k], [fx - 0.02 * k, shoulderY + 0.42 * k]]);
     limb(ctx, look.top, 0.085 * k, [[fx + 0.2 * k, shoulderY + 0.05 * k], [fx + 0.22 * k, shoulderY + 0.3 * k], [fx + 0.1 * k, shoulderY + 0.3 * k]]);
   },
+  trombone(ctx, i) {
+    const { fx, k, shoulderY, headY, headR, look } = i;
+    const my = headY + headR * 0.7;
+    limb(ctx, BRASS, 0.035 * k, [[fx, my], [fx - 0.05 * k, my + 0.75 * k]]);
+    limb(ctx, BRASS, 0.025 * k, [[fx + 0.08 * k, my + 0.05 * k], [fx + 0.03 * k, my + 0.95 * k]]);
+    circle(ctx, fx - 0.05 * k, my + 0.8 * k, 0.09 * k, BRASS);
+    limb(ctx, look.top, 0.085 * k, [[fx - 0.2 * k, shoulderY + 0.05 * k], [fx - 0.1 * k, shoulderY + 0.25 * k], [fx - 0.02 * k, shoulderY + 0.08 * k]]);
+    limb(ctx, look.top, 0.085 * k, [[fx + 0.2 * k, shoulderY + 0.05 * k], [fx + 0.25 * k, shoulderY + 0.4 * k], [fx + 0.04 * k, shoulderY + 0.55 * k]]);
+  },
+  sax(ctx, i) {
+    const { fx, k, shoulderY, headY, headR, look } = i;
+    ctx.strokeStyle = BRASS;
+    ctx.lineWidth = 0.06 * k;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(fx - 0.02 * k, headY + headR * 0.8);
+    ctx.quadraticCurveTo(fx + 0.02 * k, shoulderY + 0.5 * k, fx + 0.05 * k, shoulderY + 0.62 * k);
+    ctx.quadraticCurveTo(fx + 0.12 * k, shoulderY + 0.7 * k, fx + 0.15 * k, shoulderY + 0.48 * k);
+    ctx.stroke();
+    circle(ctx, fx + 0.15 * k, shoulderY + 0.46 * k, 0.06 * k, BRASS);
+    arms(ctx, i, "down");
+    void look;
+  },
+  tuba(ctx, i) {
+    const { fx, k, shoulderY, hipY } = i;
+    ctx.fillStyle = BRASS;
+    ctx.beginPath();
+    ctx.roundRect(fx - 0.2 * k, shoulderY + 0.05 * k, 0.36 * k, hipY - shoulderY + 0.05 * k, 0.12 * k);
+    ctx.fill();
+    ellipse(ctx, fx - 0.05 * k, shoulderY - 0.15 * k, 0.24 * k, 0.12 * k, "#e8cf7a");
+    ellipse(ctx, fx - 0.05 * k, shoulderY - 0.15 * k, 0.17 * k, 0.07 * k, "#8a6a2a");
+    arms(ctx, i, "down");
+  },
+  oboe(ctx, i, o) {
+    INSTRUMENTS.clarinet(ctx, i, o);
+  },
   sing(ctx, i) {
     arms(ctx, i, "folder");
   },
@@ -469,11 +505,15 @@ export function chair(ctx, cam, x, z, color = "#151518") {
   for (const [dx, dz] of [[-0.2, -0.18], [0.2, -0.18]]) line(ctx, cam, [x + dx, 0.46, z + dz], [x + dx, 0, z + dz], "#0b0b0d", 0.03 * k);
 }
 
-export function stand(ctx, cam, x, z, h = 1.15, tilt = 0) {
+export function stand(ctx, cam, x, z, h = 1.15, tilt = 0, desk = "#141417", y0 = 0) {
   const k = cam.scaleAt(x, z);
-  line(ctx, cam, [x, 0, z], [x, h - 0.1, z], "#0d0d0f", 0.025 * k);
-  for (const a of [0.4, 2.5, 4.6]) line(ctx, cam, [x, 0.02, z], [x + Math.cos(a) * 0.25, 0, z + Math.sin(a) * 0.25], "#0d0d0f", 0.02 * k);
-  poly(ctx, cam, [[x - 0.26 + tilt, h - 0.18, z + 0.04], [x + 0.26 + tilt, h - 0.18, z + 0.04], [x + 0.26, h + 0.12, z + 0.14], [x - 0.26, h + 0.12, z + 0.14]], "#141417");
+  line(ctx, cam, [x, y0, z], [x, y0 + h - 0.1, z], "#0d0d0f", 0.025 * k);
+  for (const a of [0.4, 2.5, 4.6]) line(ctx, cam, [x, y0 + 0.02, z], [x + Math.cos(a) * 0.25, y0, z + Math.sin(a) * 0.25], "#0d0d0f", 0.02 * k);
+  poly(ctx, cam, [[x - 0.26 + tilt, y0 + h - 0.18, z + 0.04], [x + 0.26 + tilt, y0 + h - 0.18, z + 0.04], [x + 0.26, y0 + h + 0.12, z + 0.14], [x - 0.26, y0 + h + 0.12, z + 0.14]], desk);
+  if (desk !== "#141417") {
+    // a wooden desk has a dark sheet-music panel on it
+    poly(ctx, cam, [[x - 0.17, y0 + h - 0.12, z + 0.06], [x + 0.17, y0 + h - 0.12, z + 0.06], [x + 0.17, y0 + h + 0.06, z + 0.12], [x - 0.17, y0 + h + 0.06, z + 0.12]], "#2a2622");
+  }
 }
 
 export function micStand(ctx, cam, x, z, h = 1.6) {
@@ -622,4 +662,35 @@ export function audience(ctx, cam, rows, seed = 3) {
       circle(ctx, sx, sy, 0.11 * k, HAIR[Math.floor(r() * 6)]);
     }
   }
+}
+
+export function chimes(ctx, cam, x, z, y0 = 0) {
+  const k = cam.scaleAt(x, z);
+  line(ctx, cam, [x - 0.4, y0, z], [x - 0.4, y0 + 2.0, z], "#6a6a70", 0.03 * k);
+  line(ctx, cam, [x + 0.4, y0, z], [x + 0.4, y0 + 2.0, z], "#6a6a70", 0.03 * k);
+  line(ctx, cam, [x - 0.45, y0 + 2.0, z], [x + 0.45, y0 + 2.0, z], "#6a6a70", 0.04 * k);
+  for (let n = 0; n < 9; n++) {
+    const xx = x - 0.32 + n * 0.08;
+    line(ctx, cam, [xx, y0 + 1.95, z], [xx, y0 + 1.95 - 0.9 - n * 0.05, z], "#d9dce2", 0.025 * k);
+  }
+}
+
+export function gong(ctx, cam, x, z, y0 = 0) {
+  const k = cam.scaleAt(x, z);
+  line(ctx, cam, [x - 0.55, y0, z], [x - 0.55, y0 + 1.7, z], "#2a2a2e", 0.04 * k);
+  line(ctx, cam, [x + 0.55, y0, z], [x + 0.55, y0 + 1.7, z], "#2a2a2e", 0.04 * k);
+  line(ctx, cam, [x - 0.6, y0 + 1.7, z], [x + 0.6, y0 + 1.7, z], "#2a2a2e", 0.05 * k);
+  const [gx, gy] = cam.p(x, y0 + 1.05, z);
+  circle(ctx, gx, gy, 0.48 * k, "#a8783a");
+  circle(ctx, gx, gy, 0.3 * k, "#c8984e");
+  circle(ctx, gx, gy, 0.12 * k, "#a8783a");
+}
+
+export function bassDrum(ctx, cam, x, z, y0 = 0) {
+  const k = cam.scaleAt(x, z);
+  const [bx, by] = cam.p(x, y0 + 0.7, z);
+  ellipse(ctx, bx, by, 0.18 * k, 0.45 * k, "#7a1a22");
+  ellipse(ctx, bx + 0.08 * k, by, 0.12 * k, 0.42 * k, "#ece6d8");
+  line(ctx, cam, [x - 0.25, y0, z], [x, y0 + 0.4, z], "#3a3a3e", 0.03 * k);
+  line(ctx, cam, [x + 0.25, y0, z], [x, y0 + 0.4, z], "#3a3a3e", 0.03 * k);
 }

@@ -5,11 +5,14 @@
 import { stageScene } from "./stage.js";
 import { parkScene } from "./park.js";
 import { makeHallScene, SALMON_PROGRAM_IDS } from "./salmon.js";
+import { makeMuscoScene } from "./musco.js";
 
 const salmon = SALMON_PROGRAM_IDS.map((id) => makeHallScene("salmon", id));
 const auditorium = ["piano-solo", "voice-strings", "choir", "chamber-orchestra"].map((id) => makeHallScene("auditorium", id));
 
-export const scenes = [stageScene, parkScene, ...salmon, ...auditorium];
+const musco = [makeMuscoScene("concert"), makeMuscoScene("preshow")];
+
+export const scenes = [stageScene, parkScene, ...salmon, ...auditorium, ...musco];
 
 export function getScene(id) {
   return scenes.find((s) => s.id === id) || scenes[0];

@@ -61,7 +61,7 @@ function guided(api) {
     stepFails = 0;
     if (step.enter) {
       if (step.enter.camera) api.setCamera(step.enter.camera);
-      if (step.enter.scene) api.setScene(step.enter.scene, step.enter.settings);
+      if (step.enter.scene) api.setScene(step.enter.scene, step.enter.settings, step.enter.keepSettings);
       else if (step.enter.settings) api.apply(step.enter.settings);
       if (step.enter.unlock) api.unlock(step.enter.unlock);
       if (step.enter.tool) api.showTool(step.enter.tool);

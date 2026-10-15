@@ -9,7 +9,7 @@ export function rig(sceneOrId, cameraId, preset = {}, def = {}) {
   const camera = getCamera(cameraId);
   const settings = normalizeSettings(settingsFromPreset({ ...scene.defaults, ...preset }, scene), camera, scene);
   const derived = derive(settings, camera, scene);
-  return { scene, camera, settings, derived, def, view: frameView(scene, derived, def), recording: !!def.recording };
+  return { scene, camera, settings, derived, def, view: frameView(scene, derived, def), recording: !!def.recording, start: settings };
 }
 
 // Same as lab-view's frameView: aimed at the subject, clamped inside the scene.
