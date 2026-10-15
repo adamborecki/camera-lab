@@ -424,10 +424,13 @@ export class Renderer {
 
   // Topmost opaque layer under a point (uv in scene space, v down), for
   // tap-to-focus. Moving layers are tested at rest.
-  pickDepth(u, v) {
-    const x = Math.min(this.pickW - 1, Math.max(0, Math.floor(u * this.pickW)));
+  // With `parallax` (a camera off to one side), each layer is tested where
+  // the IMAGE shader actually draws it.
+  pickDepth(u, v, parallax = null) {
     const y = Math.min(this.pickH - 1, Math.max(0, Math.floor(v * this.pickH)));
     for (let i = this.layers.length - 1; i >= 0; i--) {
+      const shift = parallax ? parallax.shift * (1 / layerDepthAt(this.layers[i], v) - 1 / parallax.aimDepth) : 0;
+      const x = Math.min(this.pickW - 1, Math.max(0, Math.floor((u - shift) * this.pickW)));
       if (this.pickMaps[i][y * this.pickW + x] > 100) {
         return { depth: layerDepthAt(this.layers[i], v), layer: this.layers[i] };
       }

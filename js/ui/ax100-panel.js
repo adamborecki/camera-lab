@@ -164,9 +164,12 @@ export class Ax100Panel {
     if (mode === "onepush") {
       // Aim at something white, press: the camera measures the light.
       this.host.change("wb", this.host.oneShotWhite());
-    } else if (mode === "temp" && (s.wbMode || "temp") !== "temp") {
-      this.host.change("wb", s.wb);
+    } else if (mode === "indoor" || mode === "outdoor") {
+      // A preset is a kelvin value; keep the dial on it so everything that
+      // reads the setting agrees with what the camera applies.
+      this.host.change("wb", mode === "indoor" ? 3200 : 5600);
     }
+    void s;
     this.host.change("wbMode", mode);
     if (mode === "temp") this.select("wb");
     else if (this.selected === "wb") this.select(null);

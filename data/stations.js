@@ -27,6 +27,7 @@
 //             step began (see exposure-triangle below), for steps that care
 //             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
+import { effectiveWb } from "../js/sim/camera-model.js";
 
 // Floor sections, in display order. Rename the label text freely (e.g. to
 // match an actual Canvas assignment name each term) — station.group values
@@ -544,7 +545,7 @@ export const stations = [
         text: "This AX100 just came out of the bag on full auto — see the <strong>A</strong> next to IRIS, SHUTTER and GAIN. On the Meter, the white needle judges the performers; the <strong>blue</strong> line is the camera's own meter. Let auto settle for a second, turn on <strong>Zebras</strong>, then Check.",
         when: (c) => c.touchedKeys.has("tool:zebras"),
         notYet: "Turn on Zebras (under the picture) and look at the singer.",
-        done: "Stripes on the performers: blown out. Yet the camera's meter says it's fine — it averages the <em>whole frame</em>, and this hall is mostly dark, so it brightens until the average looks grey. That's why concert cameras never run on auto.",
+        done: "Stripes on the performers: blown out. Yet the camera's meter says it's fine — it averages the <em>whole frame</em>, and this hall is mostly dark, so it brightens until the average looks gray. That's why concert cameras never run on auto.",
       },
       {
         text: "Take IRIS off auto: tap <strong>IRIS</strong> on the screen (or press the IRIS button on the side). The A goes away and the value freezes.",
@@ -580,8 +581,14 @@ export const stations = [
       },
       {
         text: "White balance: press <strong>WB</strong>, choose <strong>Color Temp</strong>, and turn the ring to <strong>3200K</strong>. No shift. (Indoor is also 3200K.)",
-        when: (c) => c.settings.wbMode !== "auto" && Math.abs((c.settings.wbMode === "indoor" ? 3200 : c.settings.wb) - 3200) <= 50 && !c.settings.wbAB && !c.settings.wbGM,
-        notYet: (c) => (c.settings.wbMode === "auto" ? "Still on auto white balance (AWB on the screen). Press WB." : "Not 3200K with no shift yet."),
+        when: (c) => {
+          const wb = effectiveWb(c.settings, c.scene);
+          return c.settings.wbMode !== "auto" && Math.abs(wb.kelvin - 3200) <= 50 && !wb.ab && !wb.gm;
+        },
+        notYet: (c) =>
+          c.settings.wbMode === "auto"
+            ? "Still on auto white balance (AWB on the screen). Press WB."
+            : `The camera is applying ${Math.round(effectiveWb(c.settings, c.scene).kelvin)}K${c.settings.wbAB || c.settings.wbGM ? " with a shift" : ""} — you want 3200K, no shift.`,
         done: "3200K: the default for a Standard Gear Kit gig anywhere. Salmon is the one exception — that's a later station.",
       },
       {
@@ -622,7 +629,7 @@ export const stations = [
         text: "Now press the <strong>MANUAL</strong> button on the side panel. Watch the picture and both meter needles.",
         when: (c) => c.touchedKeys.has("manual-button") && ["aperture", "shutter", "gainStops"].every((k) => c.settings.auto?.[k]),
         notYet: "Press MANUAL (side panel). If you pressed it twice, press it once more.",
-        done: "All three went to A at once, and the camera is brightening the stage until the dark hall averages out to grey. One button, and your whole setup is gone.",
+        done: "All three went to A at once, and the camera is brightening the stage until the dark hall averages out to gray. One button, and your whole setup is gone.",
       },
       {
         text: "Recover: iris, shutter and gain back to manual, performers near <strong>0</strong> on the white needle, <strong>1/60</strong>, gain <strong>9 dB</strong> or less.",

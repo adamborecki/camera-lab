@@ -80,7 +80,7 @@ export function mount(container, { station }) {
   if (renderer) renderer.setScene(scene);
 
   // ---- switcher state ----
-  const st = { program: 1, preview: 4, onAir: false, wasOnAir: false, onAirAt: 0, lastTap: null, directProgram: false, mix: null };
+  const st = { program: 1, preview: 4, onAir: false, wasOnAir: false, onAirAt: 0, lastTap: null, mix: null };
 
   function busButtons(bus) {
     const wrap = container.querySelector(`[data-bus="${bus}"]`);
@@ -91,7 +91,6 @@ export function mount(container, { station }) {
       const src = Number(b.dataset.src);
       if (bus === "program") {
         st.program = src;
-        st.directProgram = true;
         say(src === 0 ? "Program row → BLACK. That went straight out, live." : `Program row → Camera ${src}. That went straight out, live, with no look first.`);
       } else {
         st.preview = src;
@@ -311,7 +310,7 @@ export function mount(container, { station }) {
       when: (c) => c.program === 2,
       notYet: (c) => (c.preview === 2 ? "Camera 2 is on preview — now press CUT." : "Press 2 on the PREVIEW row first."),
       done: (c) =>
-        c.directProgram
+        [...c.touchedKeys].some((k) => k.startsWith("program:"))
           ? "Camera 2 is on program — but pressing the program row cuts live, with no look first. On a stream, pick it on preview, look, then CUT."
           : "Preview, look, CUT. That's the habit, even when there's only one camera that matters.",
     },
@@ -322,9 +321,9 @@ export function mount(container, { station }) {
       done: "The stream box says ON AIR, the timer's running and data is flowing to Vimeo. That one button is the whole go-live — there's no separate step in Vimeo. (On a <em>practice</em> run you never press it.)",
     },
     {
-      text: "During the recital, the static wide stays up the whole time — no cuts, no fades. Prove to yourself that preview is safe: put <strong>Camera 1 on PREVIEW</strong> without touching program.",
-      when: (c) => c.preview === 1 && c.program === 2 && c.onAir,
-      notYet: (c) => (c.program !== 2 ? "Program changed — the stream just cut away from the static wide. Put Camera 2 back on program." : !c.onAir ? "You went off air — press ON AIR again." : "Press 1 on the PREVIEW row."),
+      text: "During the recital, the static wide stays up the whole time — no cuts, no fades. Prove to yourself that preview is safe: press a few different cameras on the <strong>PREVIEW</strong> row (try 3, then 1) without touching program, and watch the Program window.",
+      when: (c) => [...c.touchedKeys].some((k) => k.startsWith("preview:")) && c.program === 2 && c.onAir,
+      notYet: (c) => (c.program !== 2 ? "Program changed — the stream just cut away from the static wide. Put Camera 2 back on program." : !c.onAir ? "You went off air — press ON AIR again." : "Press a button on the PREVIEW row."),
       done: "Preview changed; the stream didn't. Only the program row, CUT and AUTO touch what goes out.",
     },
     {

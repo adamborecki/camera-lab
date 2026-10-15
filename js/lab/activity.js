@@ -9,7 +9,7 @@
 //  playground  free exploration; completes after some real fiddling.
 import { runChecks } from "./feedback.js";
 import { markComplete, recordChallenge, isComplete, recordStep, bumpCounter } from "../progress.js";
-import { gainOptions, formatDistance, formatFocal } from "../sim/camera-model.js";
+import { gainOptions, formatDistance, formatFocal, effectiveWb } from "../sim/camera-model.js";
 
 export function createActivity(api) {
   const s = api.station;
@@ -142,6 +142,7 @@ function settingsSummary(ctx) {
   const nd = camera.nd.steps.find((n) => n.stops === st.nd);
   const shift = [st.wbAB ? (st.wbAB > 0 ? `A${st.wbAB}` : `B${-st.wbAB}`) : "", st.wbGM ? (st.wbGM > 0 ? `G${st.wbGM}` : `M${-st.wbGM}`) : ""].filter(Boolean).join(" ");
   const wbMode = st.wbMode && st.wbMode !== "temp" ? st.wbMode : "";
+  const kelvin = Math.round(effectiveWb(st, scene).kelvin);
   const autos = Object.entries(st.auto || {})
     .filter(([, on]) => on)
     .map(([k]) => ({ aperture: "iris", gainStops: "gain", shutter: "shutter", focus: "focus" })[k] || k);
@@ -154,7 +155,7 @@ function settingsSummary(ctx) {
     aperture: `f/${st.aperture}`,
     gain: g.label,
     nd: nd ? nd.label : "OFF",
-    whiteBalance: wbMode === "auto" ? "auto" : `${wbMode && wbMode !== "onepush" ? wbMode + " " : ""}${Math.round(st.wb)}K${shift ? " " + shift : ""}`,
+    whiteBalance: wbMode === "auto" ? "auto" : `${wbMode && wbMode !== "onepush" ? wbMode + " " : ""}${kelvin}K${shift ? " " + shift : ""}`,
     focus: st.auto?.focus ? "AF" : formatDistance(st.focus),
     ...(autos.length ? { onAuto: autos.join(", ") } : {}),
   };

@@ -100,11 +100,16 @@ export function mount(container) {
     const totalInteractions = stationReports.reduce((a, s) => a + s.interactions, 0);
     const totalActiveMinutes = toMinutes(floor.reduce((a, s) => a + (st.stations[s.id]?.activeMs || 0), 0));
 
-    const lines = ["Camera Lab Summary", `Stations completed: ${completed}/${floor.length}`];
+    // One line per homework: a Homework 1–2 submission made after Homework 3
+    // appeared still reads as complete.
+    const lines = ["Camera Lab Summary"];
+    const bySection = {};
     for (const [group, heading] of SECTIONS) {
       const list = stationReports.filter((r) => r.section === heading);
-      if (!list.length || group === "finish") continue;
-      lines.push(`  ${heading}: ${list.filter((r) => r.completed).length}/${list.length}`);
+      if (!list.length || group === "finish" || group === "play") continue;
+      const done = list.filter((r) => r.completed).length;
+      bySection[heading] = `${done}/${list.length}`;
+      lines.push(`${heading}: ${done}/${list.length} stations completed`);
     }
     for (const c of challenges) {
       lines.push(`Challenge — ${c.title}: ${c.result}`);
@@ -120,6 +125,7 @@ export function mount(container) {
       sessionId: st.sessionId,
       startedAt: st.startedAt,
       generatedAt: new Date().toISOString(),
+      sections: bySection,
       stationsTotal: floor.length,
       stationsOpened: opened,
       stationsCompleted: completed,
@@ -135,7 +141,7 @@ export function mount(container) {
     };
     const hash = await sha256Hex(JSON.stringify(payload));
     const final = { ...payload, checksum: `sha256:${hash}` };
-    receiptSummary.textContent = `Completed ${completed}/${floor.length} stations · ${totalInteractions} interactions · ~${totalActiveMinutes} min tracked`;
+    receiptSummary.textContent = `${Object.entries(bySection).map(([h, v]) => `${h.split(" — ")[0]}: ${v}`).join(" · ")} · ~${totalActiveMinutes} min tracked`;
     receiptText.textContent = `${lines.join("\n")}\n\n${JSON.stringify(final, null, 2)}`;
     receiptArea.hidden = false;
     copyStatus.textContent = "";

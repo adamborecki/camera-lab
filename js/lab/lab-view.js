@@ -27,6 +27,7 @@ import {
   formatDistance,
   formatFocal,
   keyLight,
+  effectiveWb,
 } from "../sim/camera-model.js";
 import { aeStep, anyAutoExposure, cameraMeter } from "../sim/auto-exposure.js";
 import { Dial } from "../ui/dial.js";
@@ -238,6 +239,7 @@ export function mountLab(container, station) {
     const prev = settings;
     const prevD = derived;
     let next = { ...settings, [key]: value };
+    if (key === "aperture") next.apertureSet = value;
     // Grabbing a control by hand takes it off auto, as on a real camera.
     if (!silent && next.auto?.[key] && !fromRing) next.auto = { ...next.auto, [key]: false };
     if (key === "aperture" || key === "focal") next = normalizeSettings(next, camera, scene);
@@ -519,12 +521,18 @@ export function mountLab(container, station) {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "chip";
-    reset.textContent = "↺ Reset camera";
+    const many = rigs.filter((r) => !r.def.reference).length > 1;
+    reset.textContent = many ? "↺ Reset this camera" : "↺ Reset camera";
     reset.addEventListener("click", () => {
-      resetSettings();
+      // On a multi-camera station, only the camera you're controlling —
+      // never the one you already finished.
+      const rig = rigs[active];
+      rig.settings = rigStart(rig);
+      rig.derived = derive(rig.settings, rig.camera, scene);
+      loadActive();
       buildControls();
       dirty = true;
-      feedEl.textContent = "Camera reset to this station's starting settings.";
+      feedEl.textContent = many ? `${rig.label || rig.id} reset to this station's starting settings.` : "Camera reset to this station's starting settings.";
       activity.onChange("reset");
     });
     pickersEl.appendChild(reset);
@@ -559,6 +567,10 @@ export function mountLab(container, station) {
     buildPickers();
     placeViewport();
     dirty = true;
+    const irisNote =
+      settings.aperture > (settings.apertureSet ?? settings.aperture) + 0.01
+        ? ` Its lens can't open to f/${settings.apertureSet} at this zoom, so the iris is at f/${settings.aperture} for now (it goes back when it can).`
+        : "";
     const tighter = derived.frameZoom > prevD.frameZoom * 1.01;
     const wider = derived.frameZoom < prevD.frameZoom * 0.99;
     const framing = tighter
@@ -566,7 +578,7 @@ export function mountLab(container, station) {
       : wider
         ? ` Bigger sensor, same lens: it sees more of the picture the lens throws, so the shot is wider — now ${formatFocal(settings.focal, camera)}.`
         : "";
-    feedEl.textContent = `${camera.name} — ${camera.blurb}${framing}`;
+    feedEl.textContent = `${camera.name} — ${camera.blurb}${framing}${irisNote}`;
     interaction();
     activity.onChange("camera");
   }
@@ -598,7 +610,7 @@ export function mountLab(container, station) {
       feedEl.textContent = "Focus is fixed in this station.";
       return;
     }
-    const hit = renderer.pickDepth(u, v);
+    const hit = renderer.pickDepth(u, v, parallaxOf(rigs[active]));
     if (!hit) return;
     if (settings.auto?.focus) setAuto("focus", false);
     magCenter = { x: u, y: v };
@@ -689,13 +701,13 @@ export function mountLab(container, station) {
       if (anyAutoExposure(s) && rig.stats) {
         const d = aeStep(s, rig.camera, rig.stats.meanLuma);
         if (Object.keys(d).length) {
-          s = normalizeSettings({ ...s, ...d }, rig.camera, scene);
+          s = normalizeSettings({ ...s, ...d, ...(d.aperture ? { apertureSet: d.aperture } : {}) }, rig.camera, scene);
           changed = true;
         }
       }
       if (s.auto?.focus) {
         const v = frameView(rig);
-        const hit = renderer.pickDepth(v.x, v.y);
+        const hit = renderer.pickDepth(v.x, v.y, parallaxOf(rig));
         if (hit && Math.abs(Math.log(hit.depth / s.focus)) > 0.01) {
           s = { ...s, focus: s.focus * (hit.depth / s.focus) ** 0.5 };
           changed = true;
@@ -752,7 +764,11 @@ export function mountLab(container, station) {
     // so it's what stays on the main canvas.
     rigs.forEach((rig, i) => {
       if (i === active || !rig.canvas2d) return;
-      if (frameCount % 2 && rig.stats) return;
+      // Monitors are small and mostly static: refresh every third frame, and
+      // only read back scopes for a camera that's metering itself.
+      if (frameCount % 3 && rig.rendered) return;
+      rig.rendered = true;
+      const metering = anyAutoExposure(rig.settings);
       const sc = renderer.render({
         settings: rig.settings,
         derived: rig.derived,
@@ -761,7 +777,7 @@ export function mountLab(container, station) {
         view: currentView(rig),
         parallax: parallaxOf(rig),
         slot: rig.slot,
-        wantScopes: true,
+        wantScopes: metering,
       });
       if (sc) {
         rig.stats = scopeStats(sc);
@@ -855,7 +871,8 @@ export function mountLab(container, station) {
     setScene: (id, extra) => setScene(id, extra),
     setCamera: (id) => setCamera(id),
     apply: (partial) => {
-      settings = normalizeSettings({ ...settings, ...partial }, camera, scene);
+      const set = partial.aperture != null ? { apertureSet: partial.aperture } : {};
+      settings = normalizeSettings({ ...settings, ...partial, ...set }, camera, scene);
       derived = derive(settings, camera, scene);
       saveActive();
       dirty = true;
@@ -906,7 +923,7 @@ export function mountLab(container, station) {
   }
 
   current.get = () => {
-    const sum = [`${settings.fps}p`, `1/${settings.shutter}`, `f/${settings.aperture}`, `gain ${settings.gainStops.toFixed(2)} st`, `ND ${settings.nd}`, settings.wbMode === "auto" ? "AWB" : `${Math.round(settings.wb)}K`];
+    const sum = [`${settings.fps}p`, `1/${settings.shutter}`, `f/${settings.aperture}`, `gain ${settings.gainStops.toFixed(2)} st`, `ND ${settings.nd}`, settings.wbMode === "auto" ? "AWB" : `${Math.round(effectiveWb(settings, scene).kelvin)}K`];
     if (settings.wbAB || settings.wbGM) sum.push(`shift ${settings.wbAB}/${settings.wbGM}`);
     const autos = Object.entries(settings.auto || {}).filter(([, v]) => v).map(([k]) => k);
     if (autos.length) sum.push(`auto: ${autos.join(",")}`);

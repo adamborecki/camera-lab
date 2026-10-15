@@ -174,10 +174,15 @@ export function normalizeSettings(s, camera, scene) {
   out.shutter = nearestLog(shutterOptions(camera), s.shutter).value;
   const lens = focalRange(scene, camera);
   out.focal = Math.min(lens.max, Math.max(lens.min, s.focal ?? lens.min));
-  // Snap to a marked stop the lens can actually open to at this zoom.
+  // Snap to a marked stop the lens can actually open to at this zoom. The
+  // iris remembers what was asked for (apertureSet): a camcorder set wide
+  // open reads F3.4 zoomed in and F2.8 again zoomed out, and swapping to a
+  // slower body and back doesn't leave the iris stopped down for good.
+  const want = s.apertureSet ?? s.aperture;
   const widest = maxApertureAt(camera, out.focal);
   const apOpts = apertureOptions(camera).filter((o) => exactAperture(o.value) >= exactAperture(widest) * 0.985);
-  out.aperture = nearestLog(apOpts.length ? apOpts : apertureOptions(camera), Math.max(s.aperture, widest)).value;
+  out.aperture = nearestLog(apOpts.length ? apOpts : apertureOptions(camera), Math.max(want, widest)).value;
+  out.apertureSet = want;
   out.gainStops = nearest(gainOptions(camera), s.gainStops).value;
   out.nd = nearest(ndOptions(camera), s.nd).value;
   out.wb = Math.min(WB_RANGE.max, Math.max(WB_RANGE.min, s.wb));

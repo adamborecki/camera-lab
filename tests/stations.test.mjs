@@ -147,3 +147,26 @@ test("guided AX100 stations: the house-default steps are reachable", () => {
   const r = rig(s.scene, "ax100", { ...s.start, aperture: 2.8, gainDb: 3, shutter: 60, auto: {} });
   assert.ok(Math.abs(r.derived.exposureStops) <= 0.5, `exposure ${r.derived.exposureStops}`);
 });
+
+test("HW2 Sensor Size: swapping through slower lenses and back leaves the iris where it was", async () => {
+  const { normalizeSettings } = await import("../js/sim/camera-model.js");
+  const scene = getScene("stage");
+  let s = rig(scene, "ff", { aperture: 2.8, focal: 85 }).settings;
+  let prev = getCamera("ff");
+  for (const id of ["g50", "ax100", "gh5", "ff"]) {
+    const cam = getCamera(id);
+    s = normalizeSettings({ ...s, focal: s.focal * (cam.sensor.crop / prev.sensor.crop) }, cam, scene);
+    prev = cam;
+  }
+  assert.equal(s.aperture, 2.8);
+});
+
+test("AX100 white-balance step judges what the camera applies, not the dial", () => {
+  const s = stations.find((x) => x.id === "ax100-out-of-bag");
+  const step = s.steps.find((st) => /Color Temp/.test(st.text));
+  const at = (p) => step.when({ ...ctxFor({ main: rig(s.scene, "ax100", { ...s.start, ...p }) }, "main") });
+  assert.equal(at({ wbMode: "outdoor", wb: 3200 }), false, "Outdoor is 5600K even if the dial says 3200");
+  assert.equal(at({ wbMode: "indoor", wb: 5600 }), true, "Indoor is 3200K");
+  assert.equal(at({ wbMode: "temp", wb: 3200 }), true);
+  assert.equal(at({ wbMode: "temp", wb: 3200, wbAB: 2 }), false, "no shift");
+});
