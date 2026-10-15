@@ -8,7 +8,7 @@
 //              judged when the student presses "Check my shot".
 //  playground  free exploration; completes after some real fiddling.
 import { runChecks } from "./feedback.js";
-import { markComplete, recordChallenge, isComplete } from "../progress.js";
+import { markComplete, recordChallenge, isComplete, recordStep, bumpCounter } from "../progress.js";
 import { gainOptions, formatDistance, formatFocal } from "../sim/camera-model.js";
 
 export function createActivity(api) {
@@ -29,6 +29,8 @@ function guided(api) {
   // without caring whether it was the very last thing they touched — see
   // exposure-triangle's steps, the only ones that read it today.
   let touchedKeys = new Set();
+  let stepStart = Date.now();
+  let stepFails = 0;
   api.el.innerHTML = `
     <div class="step-card">
       ${s.intro ? `<p class="intro">${s.intro}</p>` : ""}
@@ -55,6 +57,8 @@ function guided(api) {
     const step = s.steps[index];
     satisfied = false;
     touchedKeys = new Set();
+    stepStart = Date.now();
+    stepFails = 0;
     if (step.enter) {
       if (step.enter.camera) api.setCamera(step.enter.camera);
       if (step.enter.scene) api.setScene(step.enter.scene, step.enter.settings);
@@ -78,6 +82,7 @@ function guided(api) {
   // deliberate button press, so idle fiddling can't be mistaken for success.
   function track(key) {
     if (key) touchedKeys.add(key);
+    if (key === "reset") bumpCounter(s.id, "resets");
     if (!satisfied && feedbackEl.classList.contains("fail")) feedbackEl.hidden = true;
   }
 
@@ -89,8 +94,10 @@ function guided(api) {
     feedbackEl.hidden = false;
     if (pass) {
       satisfied = true;
+      recordStep(s.id, index, { fails: stepFails, seconds: (Date.now() - stepStart) / 1000 });
       feedbackEl.className = "step-feedback pass";
-      feedbackEl.innerHTML = `<span class="ok-mark" aria-hidden="true">✓</span> ${step.done}`;
+      const done = typeof step.done === "function" ? step.done(ctx) : step.done;
+      feedbackEl.innerHTML = `<span class="ok-mark" aria-hidden="true">✓</span> ${done}`;
       checkBtn.hidden = true;
       nextBtn.hidden = false;
       if (index < s.steps.length - 1) {
@@ -100,6 +107,8 @@ function guided(api) {
         nextBtn.textContent = "Station complete — back to Home";
       }
     } else {
+      stepFails++;
+      bumpCounter(s.id, "failedChecks");
       feedbackEl.className = "step-feedback fail";
       const notYet = (typeof step.notYet === "function" ? step.notYet(ctx) : step.notYet) || DEFAULT_NOT_YET;
       feedbackEl.innerHTML = `<span class="fail-mark" aria-hidden="true">✗</span> ${notYet}`;
@@ -115,7 +124,10 @@ function guided(api) {
       location.hash = "#/";
     }
   });
-  hintBtn.addEventListener("click", () => (hintEl.hidden = !hintEl.hidden));
+  hintBtn.addEventListener("click", () => {
+    hintEl.hidden = !hintEl.hidden;
+    if (!hintEl.hidden) bumpCounter(s.id, "hints");
+  });
 
   return {
     start: show,
@@ -128,6 +140,11 @@ function settingsSummary(ctx) {
   const { settings: st, camera, scene } = ctx;
   const g = gainOptions(camera).reduce((a, b) => (Math.abs(b.value - st.gainStops) < Math.abs(a.value - st.gainStops) ? b : a));
   const nd = camera.nd.steps.find((n) => n.stops === st.nd);
+  const shift = [st.wbAB ? (st.wbAB > 0 ? `A${st.wbAB}` : `B${-st.wbAB}`) : "", st.wbGM ? (st.wbGM > 0 ? `G${st.wbGM}` : `M${-st.wbGM}`) : ""].filter(Boolean).join(" ");
+  const wbMode = st.wbMode && st.wbMode !== "temp" ? st.wbMode : "";
+  const autos = Object.entries(st.auto || {})
+    .filter(([, on]) => on)
+    .map(([k]) => ({ aperture: "iris", gainStops: "gain", shutter: "shutter", focus: "focus" })[k] || k);
   return {
     scene: scene.title,
     camera: camera.name,
@@ -137,13 +154,26 @@ function settingsSummary(ctx) {
     aperture: `f/${st.aperture}`,
     gain: g.label,
     nd: nd ? nd.label : "OFF",
-    whiteBalance: `${Math.round(st.wb)}K`,
-    focus: formatDistance(st.focus),
+    whiteBalance: wbMode === "auto" ? "auto" : `${wbMode && wbMode !== "onepush" ? wbMode + " " : ""}${Math.round(st.wb)}K${shift ? " " + shift : ""}`,
+    focus: st.auto?.focus ? "AF" : formatDistance(st.focus),
+    ...(autos.length ? { onAuto: autos.join(", ") } : {}),
   };
+}
+
+// Final settings of every camera the student controls on this station.
+function rigSummaries(ctx) {
+  if (!ctx.rigs || Object.keys(ctx.rigs).length < 2) return settingsSummary(ctx);
+  const out = {};
+  for (const [id, r] of Object.entries(ctx.rigs)) {
+    if (r.def?.reference) continue;
+    out[id] = settingsSummary({ ...ctx, settings: r.settings, camera: r.camera });
+  }
+  return out;
 }
 
 function challenge(api) {
   const s = api.station;
+  const opened = Date.now();
   api.el.innerHTML = `
     <div class="step-card challenge-card">
       <p class="step-count">Challenge</p>
@@ -167,8 +197,14 @@ function challenge(api) {
       <ul class="result-list">${res
         .map((r) => `<li class="${r.pass ? "pass" : "fail"}"><span aria-hidden="true">${r.pass ? "✓" : "✗"}</span> <strong>${r.pass ? "OK" : "Problem"}:</strong> ${r.detail || r.label}</li>`)
         .join("")}</ul>
-      ${passed ? `<p class="result-note">Your settings are saved for the Finish page. Other combinations would also have worked — try another camera!</p>` : ""}`;
-    recordChallenge(s.id, { title: s.title, passed, settings: settingsSummary(ctx), failed: res.filter((r) => !r.pass).map((r) => r.label) });
+      ${passed ? `<p class="result-note">${s.passNote ? `${s.passNote} ` : ""}Your settings are saved for the Finish page.${s.passNote ? "" : " Other combinations would also have worked — try another camera!"}</p>` : ""}`;
+    recordChallenge(s.id, {
+      title: s.title,
+      passed,
+      settings: rigSummaries(ctx),
+      failed: res.filter((r) => !r.pass).map((r) => r.label),
+      minutesOpen: Math.round((Date.now() - opened) / 6000) / 10,
+    });
     if (passed) markComplete(s.id);
     btn.disabled = false;
   });

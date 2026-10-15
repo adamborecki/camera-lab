@@ -1,0 +1,20 @@
+# A push to a preview branch asks pages.yml to rebuild the site on main, which
+# publishes this branch at branch/<slug>/. See docs/BRANCH_PREVIEWS.md.
+name: Request branch preview
+
+on:
+  push:
+    # Keep in sync with PREVIEW_PREFIXES in tools/build-pages.sh.
+    branches: ["claude/**", "skin/**", "feature/**", "preview/**"]
+
+permissions:
+  actions: write
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild Pages from main
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}

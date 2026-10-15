@@ -16,12 +16,16 @@
   <header class="topbar">
     <a class="brand" href="#/">Camera Lab</a>
     <span class="topbar-note">video camera simulator</span>
+    <button type="button" class="bug-btn" data-report-bug title="Something weird? Report a bug">🐞 <span>Report a bug</span></button>
   </header>
 
   <main id="main">
     <section id="floor" class="floor"></section>
     <section id="stage" class="stage" hidden></section>
   </main>
+
+  <dialog id="bug" class="bug-dialog" aria-labelledby="bug-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

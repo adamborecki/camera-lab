@@ -5,7 +5,21 @@ https://adamborecki.github.io/camera-lab
 
 # Camera Lab
 
-A museum-floor-style **video camera simulator** for learning exposure, motion, focus and color — sibling of Sound Lab. Static HTML/CSS/JS (ES modules + WebGL2), no build step, no backend. Works on phones and laptops.
+A museum-floor-style **video camera simulator** for learning exposure, motion, focus and color — sibling of Sound Lab and Mixer Lab. Static HTML/CSS/JS (ES modules + WebGL2), no build step, no backend. Works on phones and laptops.
+
+Built for MUS 248 at Chapman University (student recording engineers), so the cameras and rooms are Chapman's — the Standard Gear Kit's Sony AX100s, the GH5 and G50, Salmon Recital Hall's AJA RovoCams and its ATEM livestream — but nothing here is Chapman-only: the physics and the habits transfer to any camera and any hall. Built almost entirely by "vibe coding" with Claude, with the instructor reviewing on a phone against the live site.
+
+## The homework
+
+Stations are grouped into weekly homeworks (the `SECTIONS` in `data/stations.js`), each a mix of guided stations and range-graded challenges, ending in a Finish page that produces a summary to paste into Canvas.
+
+| Section | What it's for |
+|---|---|
+| Homework 1 — Exposure Basics | aperture, shutter, ISO/gain, frame rate, the exposure triangle |
+| Homework 2 — Go Further | white balance, ND, focus & depth of field, sensor size, three challenges |
+| Homework 3 — Standard Gear Kit & Salmon | warm-ups on a random body (spaced retrieval of HW1–2), the AX100's real controls and traps, framing a static wide, matching cameras (AX100↔AX100, GH5→AX100, AX100→RovoCam), the Salmon livestream, a two-camera gig challenge |
+
+Planned next (not built): Musco — Panasonic PTZ cameras on the RP150 controller, shading (iris, gain, R/B gain, pedestal) across 4–6 cameras, the ATEM Constellation with program/preview/ISOs and calling shots. Pedagogy notes and the arc are in [`docs/COURSE_PLAN.md`](docs/COURSE_PLAN.md).
 
 ## Running locally
 
@@ -16,6 +30,16 @@ python3 -m http.server 8124
 Then open `http://localhost:8124/`. Add `?debug=1` for the developer panel (every internal number, frame timing) and a `window.cameraLab` console hook: `cameraLab.set("aperture", 1.4)`, `cameraLab.get()`, `cameraLab.setScene("park")`, `cameraLab.setCamera("g50")`, `cameraLab.frame()`.
 
 The original design brief is in [`docs/design-handoff.txt`](docs/design-handoff.txt).
+
+## Checks
+
+```bash
+npm test                     # node --test: physics, station data, every challenge is passable
+python3 -m http.server 8124 &
+node tools/smoke.mjs         # headless Chromium: every station, desktop + phone, AX100 & livestream walkthroughs
+```
+
+`npm test` brute-forces each single-camera challenge on every body it can hand out, and checks a known-good answer for each multi-camera one — an impossible step has shipped before. See [`CLAUDE.md`](CLAUDE.md).
 
 ## How it's built
 
@@ -36,23 +60,57 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 3. **Framing & crop factor** — each scene is drawn at one field of view, written as the 35mm-equivalent focal length that frames it that way (`scene.equivFocal`). The lens setting is in those same equivalent millimetres, so it means the same shot on any body, while the real focal length on the barrel is `focal / crop`. Keep the real lens and switch to a smaller sensor and the shot zooms in by the crop factor, because the sensor only covers the middle of the image circle — the sim does that by cropping into the drawn scene, aimed at `scene.aim`. So it can't frame wider than the scene, and the zoom stops at `MAX_FRAME_ZOOM` (3×) before the 1280px scene image softens — tighter than a 5.6× camcorder crop would really go.
 4. **Depth of field** — thin-lens circle of confusion per layer, from focal length, f-number, focus distance and sensor size. At a matched framing a smaller sensor runs a shorter lens, so it gets deeper focus for free; at the same real lens it sees the same blur, just cropped and magnified. "Acceptably sharp" is a blur circle under `SHARP_PX` (2) pixels of the displayed 1280-wide frame — the usual 0.03 mm-on-full-frame criterion is a print standard that works out to ~1 px here, finer than the picture can draw — so the focus map's in-focus band lands exactly where visible blur begins, at any zoom. Blur is computed in scene pixels (the view magnifies it afterwards), and blurred layers are cached and only re-blurred when focus/aperture/lens/camera change.
 5. **Motion blur** — moving layers are integrated over the time the shutter is actually open (sub-frame samples), and the picture updates at the chosen frame rate. Shutters slower than a frame repeat frames, like camcorder slow shutter.
-6. **Sensor** — photon shot noise + read noise (sensor-size dependent), per-channel clipping, then ISO/dB gain (so gain amplifies noise), white balance as RGB gains from kelvin (blackbody), highlight desaturation, a Rec.709-ish tone curve with a shoulder, sRGB out.
+6. **Sensor** — photon shot noise + read noise (sensor-size dependent), per-channel clipping, then ISO/dB gain (so gain amplifies noise), white balance as RGB gains from kelvin (blackbody) plus the A–B / G–M shift and each body's own color lean, highlight desaturation, a Rec.709-ish tone curve with a shoulder, sRGB out.
 7. **Monitoring** — histogram/waveform read back the rendered frame (before zebras/peaking overlays), so scopes always agree with the picture.
+8. **Auto functions** — auto exposure (`js/sim/auto-exposure.js`) meters the *whole* rendered frame and pushes its average toward mid grey, like a camcorder — so in a dark hall it brightens until the performers blow out while the camera's own meter (the blue line on the Meter) reads "fine". Autofocus focuses on whatever is in the middle of the frame. Auto white balance lands where the scene says a camcorder's AWB settles (`scene.awb`).
+9. **Several cameras** — a station with `rigs` puts several cameras on one stage (each with its own settings, angle and aim) on a monitor wall. One WebGL context renders them all: each camera keeps its own depth-of-field cache (a renderer "slot"), and a camera off to one side is faked with per-layer parallax (near layers slide more than far ones).
+
+### Scenes
+
+- **Concert Stage** and **Sunny Park** — the original illustrated scenes.
+- **Salmon Recital Hall** (`js/scenes/salmon.js`) — the hall from the booth, drawn in real perspective (`js/scenes/hall-kit.js` projects every wall, riser and performer from meters) after the instructor's photos in `docs/reference/`. Twelve programs: solo piano, violin/clarinet/brass with piano, piano duo, solo guitar, choir on risers, mariachi, percussion setup, early music in low light, chamber orchestra, singer with string quartet. Exposure is set so the AX100's Salmon numbers (F4 · 3 dB · 1/60) are correct.
+- **Auditorium** — the same programs in a generic dark proscenium hall: a Standard Gear Kit gig anywhere, and the room where auto exposure fails.
+
+### Camera bodies with their real controls
+
+`bodyControls: true` on a station swaps the generic dials for a replica of the body when it's an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen (tap to select, tap again to hand back to auto), the side buttons, the MANUAL ring, the MANUAL button (all three to auto — the trap), WB menu with Color Temp and A–B / G–M shift, ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
 
 ## Adding things
 
 - **A station** — add an entry to [`data/stations.js`](data/stations.js). Guided steps are `{ text, when(ctx) → bool, done, notYet? }`, judged only when the student presses **Check** (never automatically), so idly landing on the right value isn't declared a win; `notYet` can be a string or `fn(ctx) → string` to explain what's still off. Challenges use range-based `checks` from [`js/lab/feedback.js`](js/lab/feedback.js) so many solutions pass.
+- **A multi-camera station** — give it `rigs: [{ id, label, camera, start, reference?, angle: { shift }, aim: [u, v] }]`; checks like `checks.colorMatches("A", { rig: "B" })` compare them. Add a known-good answer to `tests/stations.test.mjs`.
+- **A hall program** — add an entry to `PROGRAMS` in [`js/scenes/salmon.js`](js/scenes/salmon.js) (performers and furniture at real positions in meters); it appears in Salmon and can be added to the auditorium list in `js/scenes/index.js`.
 - **A camera body** — add an entry to [`data/cameras.js`](data/cameras.js) (sensor size, noise, lens range, ISO vs dB gain, ND labels, shutter list) and optionally a HUD style in [`js/ui/hud.js`](js/ui/hud.js).
 - **A scene** — create a module like [`js/scenes/stage.js`](js/scenes/stage.js) (lights, `ev100`, `equivFocal`, `aim`, `subjects`, layers with `depth` or `depthRange`, optional `motion`) and list it in [`js/scenes/index.js`](js/scenes/index.js).
 - **A monitoring tool** — add a panel factory to [`js/ui/tools.js`](js/ui/tools.js) and a `TOOL_INFO` entry.
 
 ## Camera notes
 
-- Sony FDR-AX100: ND switch OFF / 1 / 2 / 3 ≈ 1/4, 1/16, 1/64 (2, 4, 6 stops), gain in dB, 1.0-type sensor.
-- Canon VIXIA HF G50: ND is Automatic/Off only (no manual strengths), gain 0–24 dB in 1 dB steps, 1/2.3-type sensor.
-- Panasonic GH5: Micro Four Thirds, ISO from 200, no built-in ND (screw-on ND2–ND64).
-- Values are simplified for teaching; relationships (stops, angles, crop) are real — except the zoom range, capped at 3× by the scene image's resolution.
+Spec-sheet values where they exist; teaching values otherwise. Relationships (stops, angles, crop) are real.
+
+- **Sony FDR-AX100** — 1.0-type sensor (2.7× crop); lens 29–348 mm equivalent, F2.8 wide → F4.5 tele, iris to F11 (Sony spec sheet); ND switch OFF / 1 / 2 / 3 ≈ 1/4, 1/16, 1/64 (2, 4, 6 stops); gain in dB.
+- **Canon VIXIA HF G50** — 1/2.3-type (5.6× crop); lens 29.3–601 mm equivalent in UHD 4K, f/1.8 wide → f/2.8 tele (Canon spec sheet); gain 0–24 dB; built-in ND treated as automatic-only.
+- **Panasonic GH5** — Micro Four Thirds (2×); wears the department's Lumix G Vario 14–140 mm f/3.5–5.6 (28–280 mm eq.); ISO from 200; screw-on ND.
+- **AJA RovoCam** (Salmon, reference only) — Sony FCB-ER8300 block, 1/2.3-type, F1.8 (AJA spec sheet); runs on auto white balance in Salmon.
+- Generic **Camera Lab S35** and **Full-Frame Mirrorless** bodies have no lens limits.
+- The sim's zoom stops at 3× (3.5× in the halls) because of the 1280 px scene images.
+
+### Technical verification (open)
+
+Not yet checked on the real gear — confirm before treating as instructions:
+
+- AX100: button names and positions; that the **MANUAL** button sends iris, shutter and gain to auto together (instructor's description; Sony's guide describes a PROGRAM AE button for that); double-press-to-auto on the touchscreen; gain range and step (sim: 0–33 dB in 3 dB steps); WB shift ranges (sim: ±7) and step size (sim: 5 mireds per A–B step, 1.5% green per G–M step).
+- GH5 WB adjust range (sim: ±9) and how it's written on the body.
+- G50: whether the ND can be set manually.
+- RovoCam: its exposure settings in Salmon (sim: F4 · 3 dB · 1/60 — unknown) and the iris range at tele.
+- Salmon's AWB result (`scene.awb` = 3800K A5 G2) encodes the instructor's observation that an AX100 at those numbers matches the RovoCam — not a measurement.
+- Each body's `colorBias` is illustrative, not measured.
+- Salmon livestream: the multiview layout beyond the booth photo, Camera 1 vs 2 assignment, and the Production Studio 4K → Mini Extreme ISO chain.
 
 ## Finish & Canvas
 
-The Finish page produces a readable summary plus a `camera-lab-receipt-v1` JSON block (per-station engagement, challenge results with final settings, reflections, SHA-256 checksum), in the same shape as Sound Lab's export.
+The Finish page produces a readable summary plus a `camera-lab-receipt-v2` JSON block (per-station engagement; for guided steps, failed Checks and seconds per step; hints and resets; challenge results with every camera's final settings; reflections; optional app feedback; bug reports from the 🐞 button; SHA-256 checksum), in the same shape as Sound Lab's export. It's formative: the point is to see where students got stuck, and what's broken.
+
+## Branch previews
+
+Any `claude/…`, `feature/…`, `preview/…` or `skin/…` branch publishes at `https://adamborecki.github.io/camera-lab/branch/<slug>/` — see [`docs/BRANCH_PREVIEWS.md`](docs/BRANCH_PREVIEWS.md) (needs Pages set to deploy from GitHub Actions, once).

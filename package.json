@@ -1,0 +1,9 @@
+{
+  "name": "camera-lab",
+  "private": true,
+  "description": "No dependencies and no build step. This file only tells Node that js/*.js are ES modules so the pure logic can be tested with `node --test`.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

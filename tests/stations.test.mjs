@@ -1,0 +1,149 @@
+// Every station is data; these tests catch the mistakes that only show up
+// when a student is stuck on a step nobody can pass.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { stations, SECTIONS } from "../data/stations.js";
+import { allCameras, getCamera } from "../data/cameras.js";
+import { scenes, getScene } from "../js/scenes/index.js";
+import { apertureOptions, gainOptions, ndOptions, shutterOptions, focalRange, renderedWhite, colorMatch } from "../js/sim/camera-model.js";
+import { checks } from "../js/lab/feedback.js";
+import { rig, ctxFor, allPass } from "./helpers.mjs";
+
+const CONTROLS = ["aperture", "shutter", "iso", "nd", "fps", "wb", "wbab", "wbgm", "focus", "zoom"];
+const groups = new Set(SECTIONS.map(([g]) => g));
+const camIds = new Set(allCameras.map((c) => c.id));
+const sceneIds = new Set(scenes.map((s) => s.id));
+
+test("station data is well-formed", () => {
+  const ids = new Set();
+  for (const s of stations) {
+    assert.ok(!ids.has(s.id), `duplicate id ${s.id}`);
+    ids.add(s.id);
+    assert.ok(groups.has(s.group), `${s.id}: unknown group ${s.group}`);
+    assert.ok(s.title && s.purpose, `${s.id}: title and purpose`);
+    if (s.module) {
+      assert.ok(existsSync(new URL(s.module, new URL("../data/", import.meta.url))), `${s.id}: module ${s.module} missing`);
+      continue;
+    }
+    assert.ok(sceneIds.has(s.scene), `${s.id}: unknown scene ${s.scene}`);
+    for (const c of [s.camera, ...(s.cameraPool || []), ...(s.rigs || []).map((r) => r.camera)].filter(Boolean)) assert.ok(camIds.has(c), `${s.id}: unknown camera ${c}`);
+    for (const c of s.controls || []) assert.ok(CONTROLS.includes(c), `${s.id}: unknown control ${c}`);
+    if (s.mode === "guided") for (const st of s.steps) assert.ok(st.text && typeof st.when === "function" && st.done, `${s.id}: step needs text, when, done`);
+    if (s.mode === "challenge") assert.ok(s.criteria?.length, `${s.id}: challenge without criteria`);
+    for (const st of s.steps || []) if (st.enter?.scene) assert.ok(sceneIds.has(st.enter.scene), `${s.id}: step enters unknown scene ${st.enter.scene}`);
+  }
+});
+
+// Brute-force a single-camera challenge: is there ANY setting combination
+// (from what the body offers and the station's controls allow) that passes?
+function solvable(station, cameraId) {
+  const scene = getScene(station.scene);
+  const cam = getCamera(cameraId);
+  const has = (c) => (station.controls || []).includes(c);
+  const start = rig(scene, cameraId, station.start).settings;
+  const aps = has("aperture") ? apertureOptions(cam).map((o) => o.value) : [start.aperture];
+  const gains = has("iso") ? gainOptions(cam).map((o) => o.value) : [start.gainStops];
+  const nds = has("nd") ? ndOptions(cam).map((o) => o.value) : [start.nd];
+  const shutters = has("shutter") ? shutterOptions(cam).map((o) => o.value).filter((d) => d >= 40 && d <= 125) : [start.shutter];
+  const wbs = has("wb") ? [3200, 5600] : [start.wb];
+  const depths = Object.values(scene.subjects).map((x) => x.depth);
+  const focuses = has("focus") ? [...depths, ...depths.flatMap((a) => depths.map((b) => Math.sqrt(a * b)))] : [start.focus];
+  for (const aperture of aps)
+    for (const gainStops of gains)
+      for (const nd of nds)
+        for (const shutter of shutters)
+          for (const wb of wbs)
+            for (const focus of focuses) {
+              const r = rig(scene, cameraId, { ...station.start, aperture, gainDb: undefined, iso: 100 * 2 ** gainStops, nd, shutter, wb, focus });
+              if (!allPass(station.criteria, ctxFor({ main: r }, "main")).length) return true;
+            }
+  return false;
+}
+
+test("every single-camera challenge can be passed on every camera it offers", () => {
+  const stuck = [];
+  for (const s of stations.filter((x) => x.mode === "challenge" && !x.rigs)) {
+    const cams = s.cameraPool || (s.cameraChoice ? s.cameras || allCameras.filter((c) => !c.hidden).map((c) => c.id) : [s.camera || "lab"]);
+    for (const c of cams) if (!solvable(s, c)) stuck.push(`${s.id} on ${c}`);
+  }
+  assert.deepEqual(stuck, [], "challenges nobody can pass");
+});
+
+// Multi-camera challenges: a known-good answer passes every criterion.
+const ANSWERS = {
+  "match-two-ax100": { B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", nd: 0, auto: { focus: true } } },
+  "match-rovocam": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbAB: 5, wbGM: 2, auto: { focus: true } } },
+  "sgk-gig": {
+    A: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", focal: 40, auto: { focus: true }, recording: true },
+    B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, nd: 0, focal: 36, auto: { focus: true }, recording: true },
+  },
+};
+
+test("multi-camera challenges have a passing answer", () => {
+  for (const s of stations.filter((x) => x.rigs && x.mode === "challenge")) {
+    const answer = ANSWERS[s.id];
+    if (!answer && s.id === "match-gh5") continue; // searched below
+    assert.ok(answer, `${s.id}: add a known-good answer to this test`);
+    const rigs = {};
+    for (const d of s.rigs) {
+      const a = answer[d.id];
+      rigs[d.id] = rig(s.scene, d.camera, { ...d.start, ...(a || {}), auto: a?.auto ?? d.start.auto }, { ...d, recording: a?.recording });
+    }
+    const active = s.rigs.find((d) => !d.reference).id;
+    const failed = allPass(s.criteria, ctxFor(rigs, active));
+    assert.deepEqual(failed.map((f) => f.detail), [], `${s.id}`);
+  }
+});
+
+test("GH5 can be matched to the AX100 with its own white-balance controls", () => {
+  const s = stations.find((x) => x.id === "match-gh5");
+  const ref = s.rigs.find((d) => d.reference);
+  const g = s.rigs.find((d) => !d.reference);
+  const A = rig(s.scene, ref.camera, ref.start, ref);
+  // Color first (kelvin + shift), then exposure with the GH5's own iris/ISO.
+  let found = null;
+  const sc = getScene(s.scene);
+  const white = (r) => renderedWhite(r.settings, r.camera, sc);
+  for (let wb = 2800; wb <= 4000 && !found; wb += 50)
+    for (let ab = -9; ab <= 9 && !found; ab++)
+      for (let gm = -9; gm <= 9 && !found; gm++) {
+        const G = rig(s.scene, "gh5", { ...g.start, wb, wbAB: ab, wbGM: gm }, g);
+        if (colorMatch(white(A), white(G)).dist <= 0.03) found = { wb, wbAB: ab, wbGM: gm };
+      }
+  let passed = false;
+  if (found)
+    for (const aperture of apertureOptions(getCamera("gh5")).map((o) => o.value))
+      for (const iso of [200, 250, 320, 400, 500, 640, 800]) {
+        const G = rig(s.scene, "gh5", { ...g.start, ...found, aperture, iso, shutter: 60 }, g);
+        if (!allPass(s.criteria, ctxFor({ A, G }, "G")).length) passed = true;
+      }
+  assert.ok(passed, "GH5 color matches but no exposure passes");
+  assert.ok(found, "no GH5 setting matches");
+  // …and the bare 3200K isn't already a match, or there's nothing to learn.
+  const G0 = rig(s.scene, "gh5", { ...g.start, wb: 3200 }, g);
+  assert.ok(colorMatch(renderedWhite(A.settings, A.camera, sc), renderedWhite(G0.settings, G0.camera, sc)).dist > 0.03);
+});
+
+test("the framing station can be framed for every program it uses", () => {
+  const s = stations.find((x) => x.id === "framing-static-wide");
+  const programs = [s.scene, ...s.steps.map((st) => st.enter?.scene).filter(Boolean)];
+  for (const id of programs) {
+    const scene = getScene(id);
+    const { min, max } = focalRange(scene, getCamera("ax100"));
+    let ok = false;
+    for (let f = min; f <= max + 0.01 && !ok; f *= 1.02) {
+      const r = rig(scene, "ax100", { ...s.start, focal: Math.min(f, max) });
+      ok = checks.framing().test(ctxFor({ main: r }, "main")).pass;
+    }
+    assert.ok(ok, `${id}: no zoom passes the framing check`);
+  }
+});
+
+test("guided AX100 stations: the house-default steps are reachable", () => {
+  // The step after "set F4.0 · 3 dB · 1/60" wants exposure near 0 in a darker
+  // hall without more than 9 dB: F2.8 must be reachable at the start zoom.
+  const s = stations.find((x) => x.id === "ax100-out-of-bag");
+  const r = rig(s.scene, "ax100", { ...s.start, aperture: 2.8, gainDb: 3, shutter: 60, auto: {} });
+  assert.ok(Math.abs(r.derived.exposureStops) <= 0.5, `exposure ${r.derived.exposureStops}`);
+});

@@ -2,6 +2,10 @@ import { stations, getStation, SECTIONS } from "../data/stations.js";
 import { mountLab } from "./lab/lab-view.js";
 import { recordOpen, isComplete, completionSummary } from "./progress.js";
 import { setActiveStation, clearActiveStation } from "./time-tracker.js";
+import { BugLog } from "./bugs.js";
+import { BugView } from "./ui/bug-view.js";
+import { current } from "./lab/current.js";
+import { PREVIEW, liveUrl } from "./deploy-context.js";
 
 const floorEl = document.getElementById("floor");
 const stageEl = document.getElementById("stage");
@@ -41,7 +45,8 @@ function renderFloor() {
     if (!list.length) continue;
     const h = document.createElement("h2");
     h.className = "floor-section-heading";
-    h.textContent = heading;
+    const done = list.filter((s) => isComplete(s.id)).length;
+    h.textContent = group === "finish" || group === "play" ? heading : `${heading} · ${done}/${list.length}`;
     floorEl.appendChild(h);
     const grid = document.createElement("div");
     grid.className = "station-grid";
@@ -62,7 +67,7 @@ async function renderStation(id) {
   }
   stageEl.innerHTML = "";
   stageEl.style.setProperty("--accent", station.accent);
-  stageEl.classList.toggle("stage-lab", !station.module);
+  stageEl.classList.toggle("stage-lab", !station.module || !!station.wide);
 
   const header = document.createElement("div");
   header.className = "stage-header";
@@ -73,6 +78,7 @@ async function renderStation(id) {
   body.className = "stage-body";
   stageEl.appendChild(body);
 
+  currentStation = station;
   recordOpen(station.id);
   setActiveStation(station.id);
   if (station.module) {
@@ -96,10 +102,48 @@ function route() {
       currentUnmount = null;
     }
     clearActiveStation();
+    currentStation = null;
     renderFloor();
     floorEl.hidden = false;
     stageEl.hidden = true;
   }
+}
+
+// ---------- bug reports ----------
+export const bugs = new BugLog();
+let currentStation = null;
+const toastEl = document.getElementById("toast");
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add("show");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+const bugView = new BugView(document.getElementById("bug"), {
+  bugs,
+  getContext: () => ({
+    station: currentStation?.id || "home",
+    title: currentStation?.title || "",
+    ...(current.get ? current.get() : {}),
+    url: location.href,
+  }),
+  onSaved: () => toast("Bug report saved — it'll be in your Finish summary. Thank you!"),
+});
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-report-bug]")) bugView.open();
+});
+
+// ---------- branch previews ----------
+if (PREVIEW) {
+  document.documentElement.classList.add("is-preview");
+  document.title = `[preview] ${document.title}`;
+  const bar = document.createElement("div");
+  bar.className = "preview-banner";
+  const live = document.createElement("a");
+  live.href = liveUrl(location.href);
+  live.textContent = "Go to the live site";
+  bar.append(`Preview: ${PREVIEW} · not the Canvas assignment · `, live);
+  document.body.prepend(bar);
 }
 
 window.addEventListener("hashchange", route);

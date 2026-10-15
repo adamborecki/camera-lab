@@ -76,6 +76,8 @@ uniform int uLayerCount;
 uniform vec3 uLayerLight[${MAX_LAYERS}];
 uniform float uLayerAdd[${MAX_LAYERS}];
 uniform int uLayerMover[${MAX_LAYERS}];
+uniform vec4 uLayerDepth[${MAX_LAYERS}]; // far, near, vFar, vNear (fixed depth: d, d, 0, 1)
+uniform vec2 uParallax;    // x: scene-uv shift per (1/m) of camera offset, y: 1/depth of the aim plane
 uniform vec4 uMotA[${MAX_MOVERS}];   // pivot.xy, rotBase, rotAmp
 uniform vec4 uMotB[${MAX_MOVERS}];   // rotFreq, rotPhase, spin, bounce
 uniform vec4 uMotC[${MAX_MOVERS}];   // txAmp, tyAmp, tFreq, tPhase
@@ -106,6 +108,16 @@ vec3 gauss3(uvec2 p, uint f) {
   vec3 u1 = vec3(pcg3d(uvec3(p, f))) / 4294967295.0;
   vec3 u2 = vec3(pcg3d(uvec3(p, f + 7919u))) / 4294967295.0;
   return sqrt(-2.0 * log(max(u1, 1e-7))) * cos(2.0 * PI * u2);
+}
+
+// A camera moved sideways sees near things slide further than far ones.
+// Re-aimed at the aim plane, each layer shifts by p·(1/d − 1/d_aim).
+float layerShift(int i, float v) {
+  if (uParallax.x == 0.0) return 0.0;
+  vec4 D = uLayerDepth[i];
+  float k = clamp((v - D.z) / max(D.w - D.z, 1e-4), 0.0, 1.0);
+  float invD = mix(1.0 / D.x, 1.0 / D.y, k);
+  return uParallax.x * (invD - uParallax.y);
 }
 
 vec4 sampleMover(int i, int m, vec2 p) {
@@ -149,7 +161,9 @@ void main() {
   for (int i = 0; i < ${MAX_LAYERS}; i++) {
     if (i >= uLayerCount) break;
     int m = uLayerMover[i];
-    vec4 s = m < 0 ? texture(uLayers, vec3(uv, float(i))) : sampleMover(i, m, p);
+    vec2 luv = uv;
+    luv.x -= layerShift(i, uv.y);
+    vec4 s = m < 0 ? texture(uLayers, vec3(luv, float(i))) : sampleMover(i, m, luv * SCENE);
     vec3 rad = s.rgb * uLayerLight[i];
     col = uLayerAdd[i] > 0.5 ? col + rad : rad + col * (1.0 - s.a);
   }
@@ -258,7 +272,6 @@ export class Renderer {
     this.presentProg = program(gl, PRESENT_FRAG);
     this.vao = gl.createVertexArray();
     this.scene = null;
-    this.dofKey = "";
     this.outW = 0;
     this.outH = 0;
     this.scopeFbo = this.makeTarget(SCOPE_W, SCOPE_H);
@@ -304,8 +317,7 @@ export class Renderer {
     const layers = scene.layers.slice(0, MAX_LAYERS);
     const n = layers.length;
     if (this.srcTex) gl.deleteTexture(this.srcTex);
-    if (this.blurTex) gl.deleteTexture(this.blurTex);
-    if (this.blurFbos) this.blurFbos.forEach((f) => gl.deleteFramebuffer(f));
+    this.dropSlots();
 
     const levels = Math.floor(Math.log2(Math.max(SCENE_W, SCENE_H))) + 1;
     this.srcTex = gl.createTexture();
@@ -348,27 +360,16 @@ export class Renderer {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
 
-    this.blurTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.blurTex);
-    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.SRGB8_ALPHA8, SCENE_W, SCENE_H, n);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    this.blurFbos = layers.map((_, i) => {
-      const fbo = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.blurTex, 0, i);
-      return fbo;
-    });
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     // Static per-layer uniforms.
     const movers = [];
     this.layerMover = new Int32Array(MAX_LAYERS).fill(-1);
     this.layerAdd = new Float32Array(MAX_LAYERS);
     this.layerLight = new Float32Array(MAX_LAYERS * 3);
+    this.layerDepth = new Float32Array(MAX_LAYERS * 4).fill(1);
     layers.forEach((layer, i) => {
+      const r = layer.depthRange;
+      this.layerDepth.set(r ? [r.far, r.near, r.vFar, r.vNear] : [layer.depth, layer.depth, 0, 1], i * 4);
       const light = scene.lights[layer.light || "key"];
       const rgb = kelvinToLinearRgb(light.kelvin);
       const tint = light.tint || [1, 1, 1];
@@ -383,7 +384,42 @@ export class Renderer {
     this.movers = movers;
     this.scene = scene;
     this.layers = layers;
-    this.dofKey = "";
+  }
+
+  // One cached set of depth-of-field-blurred layers per camera ("slot"), so
+  // a multiview showing several cameras with different focus and aperture
+  // doesn't re-blur the whole scene every time it switches between them.
+  slot(i) {
+    if (!this.slots) this.slots = [];
+    if (this.slots[i]) return this.slots[i];
+    const gl = this.gl;
+    const n = this.layers.length;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.SRGB8_ALPHA8, SCENE_W, SCENE_H, n);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fbos = this.layers.map((_, l) => {
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex, 0, l);
+      return fbo;
+    });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.slots[i] = { tex, fbos, key: "" };
+    return this.slots[i];
+  }
+
+  dropSlots() {
+    const gl = this.gl;
+    for (const s of this.slots || []) {
+      if (!s) continue;
+      gl.deleteTexture(s.tex);
+      s.fbos.forEach((f) => gl.deleteFramebuffer(f));
+    }
+    this.slots = [];
   }
 
   // Topmost opaque layer under a point (uv in scene space, v down), for
@@ -399,12 +435,13 @@ export class Renderer {
     return null;
   }
 
-  runDof(derived) {
+  runDof(derived, slotIndex = 0) {
     // Blur is applied to the drawn scene image, which the view may then
     // magnify — so this pass works in scene pixels, not displayed ones.
+    const slot = this.slot(slotIndex);
     const key = `${derived.cocScenePx.toFixed(4)}|${derived.focusMm.toFixed(1)}`;
-    if (key === this.dofKey) return;
-    this.dofKey = key;
+    if (key === slot.key) return slot;
+    slot.key = key;
     const gl = this.gl;
     const t0 = performance.now();
     const P = this.dofProg;
@@ -417,7 +454,7 @@ export class Renderer {
     gl.uniform1f(P.u("uCocScale"), derived.cocScenePx);
     gl.uniform1f(P.u("uFocusMm"), derived.focusMm);
     this.layers.forEach((layer, i) => {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.blurFbos[i]);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, slot.fbos[i]);
       gl.uniform1f(P.u("uLayer"), i);
       const r = layer.depthRange;
       if (r) gl.uniform4f(P.u("uDepth"), r.far, r.near, r.vFar, r.vNear);
@@ -426,6 +463,7 @@ export class Renderer {
     });
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.stats.dofMs = performance.now() - t0;
+    return slot;
   }
 
   // How many sub-frame samples a mover needs so its streak has no gaps:
@@ -443,11 +481,12 @@ export class Renderer {
   }
 
   // opts: { settings, derived, time, frameIndex, view:{x,y,zoom}, zebra,
-  //         peaking, noise, wantScopes }
+  //         peaking, noise, wantScopes, slot (blur cache, one per camera),
+  //         parallax: { shift, aimDepth } for a camera off to one side }
   render(opts) {
     const gl = this.gl;
     const { derived } = opts;
-    this.runDof(derived);
+    const slot = this.runDof(derived, opts.slot || 0);
     const t0 = performance.now();
 
     // ---- IMAGE pass → frame texture ----
@@ -457,8 +496,11 @@ export class Renderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.frame.fbo);
     gl.viewport(0, 0, this.outW, this.outH);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.blurTex);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, slot.tex);
     gl.uniform1i(P.u("uLayers"), 0);
+    gl.uniform4fv(P.u("uLayerDepth"), this.layerDepth);
+    const px = opts.parallax;
+    gl.uniform2f(P.u("uParallax"), px ? px.shift : 0, px ? 1 / px.aimDepth : 0);
     gl.uniform1i(P.u("uLayerCount"), this.layers.length);
     gl.uniform3fv(P.u("uLayerLight"), this.layerLight);
     gl.uniform1fv(P.u("uLayerAdd"), this.layerAdd);

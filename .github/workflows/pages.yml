@@ -1,0 +1,51 @@
+# Deploys GitHub Pages: main at the site root (the live Canvas assignment) and
+# each preview branch at branch/<slug>/. See docs/BRANCH_PREVIEWS.md.
+#
+# Only main deploys: the github-pages environment accepts deployments from
+# main alone. A push to a preview branch asks this workflow to run on main
+# (preview-trigger.yml), and every run rebuilds the whole site from the
+# current branches, so deleted branches drop out on the next run.
+name: Deploy site and branch previews
+
+on:
+  push:
+    branches: ["main"]
+  # Runs on the default branch whenever a branch is deleted.
+  delete:
+  # Manual runs, and runs requested by preview-trigger.yml.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a queued run replaces an older queued one, which
+# is fine because every run builds from the latest branches.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Build site
+        run: tools/build-pages.sh _site
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

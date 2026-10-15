@@ -7,7 +7,11 @@
 //     gainStops (stops of gain above ISO 100), nd (stops), wb (kelvin),
 //     focus (meters), focal (35mm-EQUIVALENT focal length, mm — see
 //     "framing" below; the real lens on the body is focal / crop) }
-import { whiteBalanceGains } from "./color.js";
+//   Optional: wbAB / wbGM (white-balance shift steps; + = amber / green),
+//   wbMode ("temp" — dial in kelvin — or "auto", "indoor", "outdoor"), and
+//   auto: { aperture, shutter, gainStops, focus } — which settings the
+//   camera is choosing for itself (lab-view's auto-exposure loop writes them).
+import { whiteBalanceGains, kelvinToLinearRgb } from "./color.js";
 
 // Every scene is drawn at this resolution; blur radii are in these pixels.
 export const SCENE_W = 1280;
@@ -122,8 +126,28 @@ export const FOCUS_RANGE = { min: 0.4, max: 100 };
 // that's where the zoom range stops, tighter than a 5.6× crop would really go.
 export const MAX_FRAME_ZOOM = 3;
 
-export function focalRange(scene) {
-  return { min: scene.equivFocal, max: scene.equivFocal * MAX_FRAME_ZOOM };
+export function focalRange(scene, camera) {
+  const maxZoom = scene.maxFrameZoom || MAX_FRAME_ZOOM;
+  let min = scene.equivFocal;
+  let max = scene.equivFocal * maxZoom;
+  const lens = camera?.lens;
+  if (lens) {
+    // A real lens can't go wider than its wide end — the scene is drawn wider
+    // than that, so the shot starts zoomed in. Nor past its long end.
+    min = Math.min(max, Math.max(min, lens.wide));
+    max = Math.max(min, Math.min(max, lens.tele));
+  }
+  return { min, max };
+}
+
+// The widest f-number this body's lens reaches at a framing (35mm-equivalent
+// mm). Camcorder zooms lose light as they zoom in; this ramps the f-number
+// from apWide to apTele on a log scale, which is close to how they behave.
+export function maxApertureAt(camera, focalEquiv) {
+  const lens = camera.lens;
+  if (!lens || !lens.apTele || lens.apTele === lens.apWide) return camera.aperture.min;
+  const k = Math.min(1, Math.max(0, Math.log(focalEquiv / lens.wide) / Math.log(lens.tele / lens.wide)));
+  return lens.apWide * (lens.apTele / lens.apWide) ** k;
 }
 
 // The real focal length (mm) that gives this framing on this body.
@@ -148,13 +172,21 @@ export function normalizeSettings(s, camera, scene) {
   const out = { ...s };
   out.fps = nearest(fpsOptions(camera), s.fps).value;
   out.shutter = nearestLog(shutterOptions(camera), s.shutter).value;
-  out.aperture = nearestLog(apertureOptions(camera), s.aperture).value;
+  const lens = focalRange(scene, camera);
+  out.focal = Math.min(lens.max, Math.max(lens.min, s.focal ?? lens.min));
+  // Snap to a marked stop the lens can actually open to at this zoom.
+  const widest = maxApertureAt(camera, out.focal);
+  const apOpts = apertureOptions(camera).filter((o) => exactAperture(o.value) >= exactAperture(widest) * 0.985);
+  out.aperture = nearestLog(apOpts.length ? apOpts : apertureOptions(camera), Math.max(s.aperture, widest)).value;
   out.gainStops = nearest(gainOptions(camera), s.gainStops).value;
   out.nd = nearest(ndOptions(camera), s.nd).value;
   out.wb = Math.min(WB_RANGE.max, Math.max(WB_RANGE.min, s.wb));
   out.focus = Math.min(INFINITY_M, Math.max(FOCUS_RANGE.min, s.focus));
-  const lens = focalRange(scene);
-  out.focal = Math.min(lens.max, Math.max(lens.min, s.focal ?? lens.min));
+  const sh = camera.wbShift;
+  out.wbAB = sh ? Math.max(-sh.ab, Math.min(sh.ab, Math.round(s.wbAB || 0))) : 0;
+  out.wbGM = sh ? Math.max(-sh.gm, Math.min(sh.gm, Math.round(s.wbGM || 0))) : 0;
+  out.wbMode = s.wbMode || "temp";
+  out.auto = { ...(s.auto || {}) };
   return out;
 }
 
@@ -171,7 +203,79 @@ export function settingsFromPreset(p, scene) {
     wb: p.wb ?? 5600,
     focus: p.focus ?? 3,
     focal: p.focal ?? scene.equivFocal,
+    wbAB: p.wbAB ?? 0,
+    wbGM: p.wbGM ?? 0,
+    wbMode: p.wbMode ?? "temp",
+    auto: { ...(p.auto || {}) },
   };
+}
+
+// ---------- white balance ----------
+//
+// One step of white-balance shift. Sony documents the A–B axis in steps of
+// about 5 mireds (unverified for the AX100 specifically); G–M has no common
+// unit, so a step here is a 1.5% green gain. Both are teaching values: they
+// move the picture the right way by a plausible amount.
+export const WB_AB_MIRED = 5;
+export const WB_GM_STEP = 0.015;
+export const WB_PRESETS = { indoor: 3200, outdoor: 5600 };
+
+export function keyLight(scene) {
+  return scene.lights[scene.keyLight] || Object.values(scene.lights)[0];
+}
+
+// What white balance the camera is actually applying: { kelvin, ab, gm }.
+// Auto lands where the scene says a camcorder's AWB settles (scene.awb) —
+// rarely perfectly neutral under warm stage light — or, if the scene doesn't
+// say, exactly on the key light.
+export function effectiveWb(s, scene) {
+  const mode = s.wbMode || "temp";
+  let base = { kelvin: s.wb, ab: 0, gm: 0 };
+  if (mode === "auto") base = { ab: 0, gm: 0, ...(scene.awb || { kelvin: keyLight(scene).kelvin }) };
+  else if (WB_PRESETS[mode]) base = { kelvin: WB_PRESETS[mode], ab: 0, gm: 0 };
+  return { kelvin: base.kelvin, ab: base.ab + (s.wbAB || 0), gm: base.gm + (s.wbGM || 0) };
+}
+
+// RGB gains for the whole white-balance chain: kelvin, then the shift, then
+// the body's own color lean. Amber shift = camera assumes cooler light (fewer
+// mireds) than the dial says, so it leaves the picture warmer.
+export function wbGainsFor(s, camera, scene) {
+  const wb = effectiveWb(s, scene);
+  const mired = 1e6 / wb.kelvin - wb.ab * WB_AB_MIRED;
+  const g = whiteBalanceGains(1e6 / Math.max(40, Math.min(600, mired)));
+  const green = 1 + wb.gm * WB_GM_STEP;
+  const bias = camera.colorBias || [1, 1, 1];
+  return [g[0] * bias[0], g[1] * green * bias[1], g[2] * bias[2]];
+}
+
+// How a white object under the scene's key light comes out, as log chroma
+// (ln R/G, ln B/G) — 0,0 is neutral. Comparing two cameras' renders of the
+// same white is how the matching stations judge color: it's exactly what an
+// operator compares on the multiview, minus the eyeballs.
+export function renderedWhite(s, camera, scene) {
+  const k = keyLight(scene);
+  const light = kelvinToLinearRgb(k.kelvin).map((v, i) => v * (k.tint ? k.tint[i] : 1));
+  const g = wbGainsFor(s, camera, scene);
+  const r = light[0] * g[0];
+  const gr = light[1] * g[1];
+  const b = light[2] * g[2];
+  return { rg: Math.log(r / gr), bg: Math.log(b / gr) };
+}
+
+// Color distance between two renders, in the same log units. About 0.02 is
+// where two monitors side by side start to look "the same"; 0.1 is an
+// obvious cast. Also returns which way B is off from A, in words.
+export function colorMatch(a, b) {
+  const dr = b.rg - a.rg;
+  const db = b.bg - a.bg;
+  const dist = Math.hypot(dr, db);
+  // Amber–blue is mostly (R up, B down); green–magenta is G against both.
+  const warm = (dr - db) / 2;
+  const green = -(dr + db) / 2;
+  const words = [];
+  if (Math.abs(warm) > 0.015) words.push(warm > 0 ? "warmer (more amber)" : "cooler (more blue)");
+  if (Math.abs(green) > 0.012) words.push(green > 0 ? "greener" : "more magenta");
+  return { dist, warm, green, words };
 }
 
 // ---------- the physics ----------
@@ -255,7 +359,8 @@ export function derive(s, camera, scene) {
     shotK,
     readSigma,
     midNoisePct,
-    wbGains: whiteBalanceGains(s.wb),
+    wbGains: wbGainsFor(s, camera, scene),
+    maxAperture: maxApertureAt(camera, s.focal),
   };
 }
 

@@ -1,15 +1,21 @@
 // Finish & Submit — same export pattern as Sound Lab: two reflections, a
 // readable summary, and a JSON block with a SHA-256 checksum to paste into
 // Canvas. Challenge entries include the student's final camera settings.
+// v2 adds where students got stuck (failed Checks and time per guided step,
+// hints, resets), app feedback, and any bug reports — formative data for the
+// instructor, and a bug list for whoever maintains the app.
 import { getState, setReflection, markComplete } from "../js/progress.js";
 import { stations, SECTIONS } from "../data/stations.js";
+import { BugLog } from "../js/bugs.js";
+import { PREVIEW } from "../js/deploy-context.js";
 
 const sectionLabel = Object.fromEntries(SECTIONS);
 
 const STATION_ID = "finish";
-const RECEIPT_SCHEMA = "camera-lab-receipt-v1";
+const RECEIPT_SCHEMA = "camera-lab-receipt-v2";
 const QUESTION_1 = "Describe one setting change that fixed one problem but created another.";
 const QUESTION_2 = "If you were filming a real concert tomorrow, what would you set first, and why?";
+const QUESTION_3 = "Optional: anything in Camera Lab that was confusing, broken, or didn't match the real camera?";
 
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -30,6 +36,9 @@ export function mount(container) {
     <textarea id="reflection1" class="reflection-input" rows="3"></textarea>
     <label class="reflection-label" for="reflection2">${QUESTION_2}</label>
     <textarea id="reflection2" class="reflection-input" rows="3"></textarea>
+    <label class="reflection-label" for="appFeedback">${QUESTION_3}</label>
+    <textarea id="appFeedback" class="reflection-input" rows="2" placeholder="e.g. the GAIN button didn't respond on my phone"></textarea>
+    <p class="prompt">Found a bug along the way? Use <button type="button" class="linkish" data-report-bug>Report a bug</button> (top right) — reports are added to this summary.</p>
     <button class="btn btn-start" id="generate-btn" type="button">Generate My Summary</button>
     <div id="receipt-area" hidden>
       <p class="receipt-summary" id="receipt-summary"></p>
@@ -43,6 +52,9 @@ export function mount(container) {
   const initial = getState();
   const r1 = container.querySelector("#reflection1");
   const r2 = container.querySelector("#reflection2");
+  const r3 = container.querySelector("#appFeedback");
+  r3.value = initial.reflections?.appFeedback || "";
+  r3.addEventListener("change", () => setReflection("appFeedback", r3.value));
   r1.value = initial.reflections?.reflection1 || "";
   r2.value = initial.reflections?.reflection2 || "";
   r1.addEventListener("change", () => setReflection("reflection1", r1.value));
@@ -56,6 +68,7 @@ export function mount(container) {
   container.querySelector("#generate-btn").addEventListener("click", async () => {
     setReflection("reflection1", r1.value);
     setReflection("reflection2", r2.value);
+    setReflection("appFeedback", r3.value);
     const st = getState();
     const stationReports = floor.map((s) => {
       const p = st.stations[s.id] || {};
@@ -68,6 +81,10 @@ export function mount(container) {
         completed: !!p.completed,
         interactions: p.interactions || 0,
         activeMinutes: toMinutes(p.activeMs || 0),
+        ...(p.steps ? { steps: p.steps.map((x, i) => ({ step: i + 1, failedChecks: x?.fails || 0, seconds: x?.seconds || 0 })) } : {}),
+        ...(p.failedChecks ? { failedChecks: p.failedChecks } : {}),
+        ...(p.hints ? { hintsOpened: p.hints } : {}),
+        ...(p.resets ? { resets: p.resets } : {}),
       };
     });
     const challenges = floor
@@ -75,7 +92,7 @@ export function mount(container) {
       .map((s) => {
         const c = st.challenges?.[s.id];
         return c
-          ? { id: s.id, title: s.title, result: c.passed ? "Passed" : "Not passed yet", attempts: c.attempts, finalSettings: c.settings }
+          ? { id: s.id, title: s.title, result: c.passed ? "Passed" : "Not passed yet", attempts: c.attempts, finalSettings: c.settings, ...(c.failed?.length ? { stillFailing: c.failed } : {}) }
           : { id: s.id, title: s.title, result: "Not attempted" };
       });
     const opened = stationReports.filter((s) => s.opened).length;
@@ -84,11 +101,18 @@ export function mount(container) {
     const totalActiveMinutes = toMinutes(floor.reduce((a, s) => a + (st.stations[s.id]?.activeMs || 0), 0));
 
     const lines = ["Camera Lab Summary", `Stations completed: ${completed}/${floor.length}`];
+    for (const [group, heading] of SECTIONS) {
+      const list = stationReports.filter((r) => r.section === heading);
+      if (!list.length || group === "finish") continue;
+      lines.push(`  ${heading}: ${list.filter((r) => r.completed).length}/${list.length}`);
+    }
     for (const c of challenges) {
       lines.push(`Challenge — ${c.title}: ${c.result}`);
       if (c.finalSettings) {
         const f = c.finalSettings;
-        lines.push(`  ${f.camera} · ${f.lens || "—"} · ${f.frameRate} · ${f.shutter} · ${f.aperture} · ${f.gain} · ND ${f.nd} · WB ${f.whiteBalance} · focus ${f.focus}`);
+        const one = (f) => `${f.camera} · ${f.lens || "—"} · ${f.frameRate} · ${f.shutter} · ${f.aperture} · ${f.gain} · ND ${f.nd} · WB ${f.whiteBalance} · focus ${f.focus}${f.onAuto ? ` · auto: ${f.onAuto}` : ""}`;
+        if (f.camera) lines.push(`  ${one(f)}`);
+        else for (const [id, r] of Object.entries(f)) lines.push(`  ${id}: ${one(r)}`);
       }
     }
     const payload = {
@@ -103,6 +127,9 @@ export function mount(container) {
       totalActiveMinutes,
       reflection1: { question: QUESTION_1, answer: r1.value.trim() },
       reflection2: { question: QUESTION_2, answer: r2.value.trim() },
+      appFeedback: r3.value.trim(),
+      bugReports: new BugLog().list().map(({ text, at, station, camera, scene, settings, browser }) => ({ text, at, station, camera, scene, settings, browser })),
+      ...(PREVIEW ? { preview: PREVIEW } : {}),
       challenges,
       stations: stationReports,
     };
@@ -132,5 +159,6 @@ export function mount(container) {
   return () => {
     setReflection("reflection1", r1.value);
     setReflection("reflection2", r2.value);
+    setReflection("appFeedback", r3.value);
   };
 }

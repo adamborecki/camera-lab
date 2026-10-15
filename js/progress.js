@@ -1,7 +1,11 @@
 // Local, forgiving progress tracking (same shape as Sound Lab). No server, no
 // PII — just enough state to know what's been opened/completed, plus the
 // final camera settings from each challenge for the Canvas export.
-const STORAGE_KEY = "cameralab.progress.v1";
+import { storageKey } from "./deploy-context.js";
+
+// A branch preview keeps its own progress (see deploy-context.js), so trying
+// a preview never touches a student's real homework record.
+const STORAGE_KEY = storageKey("cameralab.progress.v1");
 
 function newSessionId() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -95,6 +99,23 @@ export function recordChallenge(id, result) {
   } else {
     prev.attempts = attempts;
   }
+  save();
+}
+
+// Where students get stuck: per guided step, how many Checks failed and how
+// long the step took; hints opened; resets. Approximate, like activeMs —
+// it's for spotting confusing steps (and app bugs), not grading.
+export function recordStep(id, index, { fails, seconds }) {
+  const s = ensureStation(id);
+  s.steps = s.steps || [];
+  const prev = s.steps[index] || { fails: 0, seconds: 0 };
+  s.steps[index] = { fails: prev.fails + fails, seconds: Math.round((prev.seconds + seconds) * 10) / 10 };
+  save();
+}
+
+export function bumpCounter(id, key) {
+  const s = ensureStation(id);
+  s[key] = (s[key] || 0) + 1;
   save();
 }
 

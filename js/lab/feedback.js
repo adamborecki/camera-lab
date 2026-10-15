@@ -5,7 +5,17 @@
 //    { label, test(ctx) → { pass, detail } } where ctx is
 //    { settings, derived, camera, scene, stats }. Criteria use ranges, so a
 //    challenge accepts every reasonable solution, not one magic combination.
-import { formatStops, stopWord, formatDistance, formatShutterAngle, formatFocal, gainOptions } from "../sim/camera-model.js";
+import {
+  formatStops,
+  stopWord,
+  formatDistance,
+  formatShutterAngle,
+  formatFocal,
+  gainOptions,
+  renderedWhite,
+  colorMatch,
+  effectiveWb,
+} from "../sim/camera-model.js";
 
 function gainLabel(camera, stops) {
   const opts = gainOptions(camera);
@@ -181,6 +191,163 @@ export const checks = {
     };
   },
 };
+
+// ---------- multi-camera & real-gig criteria ----------
+//
+// Rig-aware checks read ctx.rigs[id] (lab-view gives every camera on the
+// station); `rig` defaults to the one the student is controlling.
+
+const rigOf = (ctx, id) => (id ? ctx.rigs?.[id] : null) || { settings: ctx.settings, derived: ctx.derived, camera: ctx.camera, view: ctx.view };
+const rigName = (ctx, id) => ctx.rigs?.[id]?.def?.label || id || "your camera";
+const gainDbOf = (r) => gainOptions(r.camera).reduce((b, o) => (Math.abs(o.value - r.settings.gainStops) < Math.abs(b.value - r.settings.gainStops) ? o : b));
+
+Object.assign(checks, {
+  // Two cameras' whites look the same on the multiview.
+  colorMatches(refId, { rig, tol = 0.03 } = {}) {
+    return {
+      label: `Color matches ${refId}`,
+      test: (ctx) => {
+        const a = rigOf(ctx, refId);
+        const b = rigOf(ctx, rig);
+        const m = colorMatch(renderedWhite(a.settings, a.camera, ctx.scene), renderedWhite(b.settings, b.camera, ctx.scene));
+        const ok = m.dist <= tol;
+        return {
+          pass: ok,
+          detail: ok
+            ? `Color matches ${rigName(ctx, refId)}.`
+            : `${cap(rigName(ctx, rig))} looks ${m.words.join(" and ") || "a little different"} than ${rigName(ctx, refId)}.`,
+        };
+      },
+    };
+  },
+  // …and the same brightness (on the performers, not the whole frame).
+  brightnessMatches(refId, { rig, tol = 0.34 } = {}) {
+    return {
+      label: `Brightness matches ${refId} (±⅓ stop)`,
+      test: (ctx) => {
+        const a = rigOf(ctx, refId).derived.exposureStops;
+        const b = rigOf(ctx, rig).derived.exposureStops;
+        const d = b - a;
+        return {
+          pass: Math.abs(d) <= tol,
+          detail: Math.abs(d) <= tol ? "Same brightness." : `${cap(rigName(ctx, rig))} is ${formatStops(Math.abs(d), { sign: false })} ${stopWord(d)} ${d > 0 ? "brighter" : "darker"} than ${rigName(ctx, refId)}.`,
+        };
+      },
+    };
+  },
+  // Exposure judged on the subject, for one rig.
+  rigExposure(lo, hi, { rig } = {}) {
+    const base = checks.exposure(lo, hi);
+    return { label: base.label, test: (ctx) => base.test({ ...ctx, derived: rigOf(ctx, rig).derived }) };
+  },
+  noAutoExposure({ rig } = {}) {
+    return {
+      label: "Iris, shutter and gain locked (no A)",
+      test: (ctx) => {
+        const s = rigOf(ctx, rig).settings;
+        const on = ["aperture", "shutter", "gainStops"].filter((k) => s.auto?.[k]);
+        const names = { aperture: "IRIS", shutter: "SHUTTER", gainStops: "GAIN" };
+        return {
+          pass: on.length === 0,
+          detail: on.length ? `${cap(rigName(ctx, rig))}: ${on.map((k) => names[k]).join(", ")} still on auto — the camera will drift as the light changes.` : "Exposure locked.",
+        };
+      },
+    };
+  },
+  shutterIs(denom, { rig } = {}) {
+    return {
+      label: `Shutter 1/${denom}`,
+      test: (ctx) => {
+        const s = rigOf(ctx, rig).settings;
+        return { pass: s.shutter === denom, detail: s.shutter === denom ? `1/${denom}.` : `${cap(rigName(ctx, rig))} is at 1/${s.shutter} — the house standard is 1/${denom}.` };
+      },
+    };
+  },
+  maxGainDb(db, { rig } = {}) {
+    return {
+      label: `Gain ${db} dB or less`,
+      test: (ctx) => {
+        const r = rigOf(ctx, rig);
+        const g = gainDbOf(r);
+        const ok = r.settings.gainStops <= Math.log2(r.camera.gain.baseIso / 100) + db / 6 + 0.01;
+        return { pass: ok, detail: ok ? `${g.label}.` : `${cap(rigName(ctx, rig))} is at ${g.label} — more gain than this shot needs (noise).` };
+      },
+    };
+  },
+  whiteBalance(kelvin, { rig, tol = 100, shift = false } = {}) {
+    return {
+      label: `White balance ${kelvin}K${shift ? "" : ", no shift"}`,
+      test: (ctx) => {
+        const r = rigOf(ctx, rig);
+        const wb = effectiveWb(r.settings, ctx.scene);
+        const auto = r.settings.wbMode === "auto";
+        const ok = !auto && Math.abs(wb.kelvin - kelvin) <= tol && (shift || (!wb.ab && !wb.gm));
+        return {
+          pass: ok,
+          detail: ok
+            ? `${kelvin}K.`
+            : auto
+              ? `${cap(rigName(ctx, rig))} is on auto white balance — it can drift between pieces. Set ${kelvin}K.`
+              : `${cap(rigName(ctx, rig))} is at ${Math.round(wb.kelvin)}K${wb.ab || wb.gm ? " with a shift" : ""} — set ${kelvin}K${shift ? "" : " with no shift"}.`,
+        };
+      },
+    };
+  },
+  ndOff({ rig } = {}) {
+    return {
+      label: "ND off (indoors)",
+      test: (ctx) => {
+        const s = rigOf(ctx, rig).settings;
+        return { pass: s.nd === 0, detail: s.nd === 0 ? "ND off." : `${cap(rigName(ctx, rig))} still has ND in — that's for daylight; indoors it only costs light.` };
+      },
+    };
+  },
+  autofocusOn({ rig } = {}) {
+    return {
+      label: "Autofocus on",
+      test: (ctx) => {
+        const s = rigOf(ctx, rig).settings;
+        return { pass: !!s.auto?.focus, detail: s.auto?.focus ? "AF on." : `${cap(rigName(ctx, rig))} is on manual focus — the house standard is AF.` };
+      },
+    };
+  },
+  recording({ rig } = {}) {
+    return {
+      label: "Recording",
+      test: (ctx) => {
+        const r = ctx.rigs?.[rig || ctx.activeRig];
+        const on = r ? !!r.recording : !!ctx.recording;
+        return { pass: on, detail: on ? "Rolling." : `${cap(rigName(ctx, rig))} isn't recording.` };
+      },
+    };
+  },
+  // "As close as possible, but wide enough for bows": everyone (standing)
+  // inside the frame with a little air, and the group filling a good share
+  // of it — or the lens all the way in.
+  framing({ rig, minFill = 0.62 } = {}) {
+    return {
+      label: "Framed tight, with room to bow",
+      test: (ctx) => {
+        const r = rigOf(ctx, rig);
+        const b = ctx.scene.framing;
+        if (!b) return { pass: true, detail: "" };
+        const v = r.view;
+        const half = 0.5 / v.zoom;
+        const fx0 = v.x - half;
+        const fx1 = v.x + half;
+        const fy0 = v.y - half;
+        const fy1 = v.y + half;
+        const pad = 0.01 / v.zoom;
+        const inside = b.x0 >= fx0 + pad && b.x1 <= fx1 - pad && b.y0 >= fy0 + pad && b.y1 <= fy1 - pad;
+        const fill = Math.max((b.x1 - b.x0) / (fx1 - fx0), (b.y1 - b.y0) / (fy1 - fy0));
+        const maxed = r.derived.frameZoom >= (ctx.scene.maxFrameZoom || 3) * 0.97 || r.settings.focal >= (r.camera.lens?.tele || Infinity) * 0.97;
+        if (!inside) return { pass: false, detail: "Too tight — someone (standing for a bow) would be cut off. Zoom out a little." };
+        if (fill < minFill && !maxed) return { pass: false, detail: `Lots of empty space — the group only fills ${Math.round(fill * 100)}% of the frame. Zoom in until it's snug, leaving room to stand.` };
+        return { pass: true, detail: "Snug, with room for bows." };
+      },
+    };
+  },
+});
 
 const is = (s) => (s.plural ? "are" : "is");
 

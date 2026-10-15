@@ -1,7 +1,13 @@
-// The lab: one camera + one scene + the controls and tools a station allows.
+// The lab: cameras + one scene + the controls and tools a station allows.
 // Every station (guided, challenge, playground) is this same view configured
 // by data (data/stations.js). It owns the render loop and the settings; the
 // activity engine (activity.js) only reads context and makes requests.
+//
+// Most stations have one camera. A station with `rigs` has several looking
+// at the same stage — a center wide and a backup at another angle, or a
+// RovoCam the AX100 has to match — shown side by side on a monitor wall. One
+// rig is "active" (its controls are on screen); tap another monitor to
+// switch, unless it's a `reference` the student can't touch.
 import { Renderer } from "../render/renderer.js";
 import { getScene, scenes } from "../scenes/index.js";
 import { cameras, getCamera } from "../../data/cameras.js";
@@ -20,13 +26,17 @@ import {
   realFocal,
   formatDistance,
   formatFocal,
+  keyLight,
 } from "../sim/camera-model.js";
+import { aeStep, anyAutoExposure, cameraMeter } from "../sim/auto-exposure.js";
 import { Dial } from "../ui/dial.js";
 import { Hud } from "../ui/hud.js";
+import { Ax100Panel } from "../ui/ax100-panel.js";
 import { ToolPanels, TOOL_INFO, scopeStats } from "../ui/tools.js";
 import { describeChange } from "./feedback.js";
 import { createActivity } from "./activity.js";
 import { recordInteraction } from "../progress.js";
+import { current } from "./current.js";
 
 const WB_DIAL = {
   min: WB_RANGE.min,
@@ -57,7 +67,7 @@ const FOCUS_DIAL = {
 // range is the same on every body — but it's marked in the real millimetres
 // engraved on that body's barrel, which is what changes with the sensor.
 const ZOOM_DIAL = (camera, scene) => {
-  const { min, max } = focalRange(scene);
+  const { min, max } = focalRange(scene, camera);
   const mm = (f) => Math.round(realFocal(f, camera));
   return {
     min,
@@ -67,11 +77,20 @@ const ZOOM_DIAL = (camera, scene) => {
     toPos: (f) => Math.log2(f / min) * 24,
     fromPos: (p) => min * 2 ** (p / 24),
     format: (f) => formatFocal(f, camera),
-    ticks: [1, 1.25, 1.5, 2, 2.5, 3]
+    ticks: [1, 1.25, 1.5, 2, 2.5, 3, 3.5]
       .filter((r) => r * min <= max + 0.01)
       .map((r) => ({ value: r * min, label: `${mm(r * min)}mm`, tapeLabel: `${mm(r * min)}`, major: true })),
   };
 };
+
+// White-balance shift, written the way the body writes it.
+function shiftOptions(camera, axis) {
+  const max = camera.wbShift?.[axis === "ab" ? "ab" : "gm"] || 0;
+  const [pos, neg] = axis === "ab" ? ["A", "B"] : ["G", "M"];
+  const out = [];
+  for (let v = -max; v <= max; v++) out.push({ value: v, label: v > 0 ? `${pos}${v}` : v < 0 ? `${neg}${-v}` : "0", major: v % 3 === 0 });
+  return out;
+}
 
 // Station control names → settings keys + how to build the dial.
 const CONTROLS = {
@@ -81,17 +100,16 @@ const CONTROLS = {
   nd: { key: "nd", label: (c) => (c.nd.kind === "external" ? "ND filter (screw-on)" : "ND filter"), options: ndOptions },
   fps: { key: "fps", label: () => "Frame rate", options: fpsOptions },
   wb: { key: "wb", label: () => "White balance", continuous: WB_DIAL },
+  wbab: { key: "wbAB", label: () => "WB shift A–B", options: (c) => shiftOptions(c, "ab") },
+  wbgm: { key: "wbGM", label: () => "WB shift G–M", options: (c) => shiftOptions(c, "gm") },
   focus: { key: "focus", label: () => "Focus", continuous: FOCUS_DIAL },
   zoom: { key: "focal", label: () => "Zoom (lens)", continuous: ZOOM_DIAL },
 };
-const CONTROL_ORDER = ["aperture", "shutter", "iso", "nd", "fps", "wb", "focus", "zoom"];
+const CONTROL_ORDER = ["aperture", "shutter", "iso", "nd", "fps", "wb", "wbab", "wbgm", "focus", "zoom"];
 
 export function mountLab(container, station) {
-  const debug = /[?&]debug/.test(location.search) || localStorage.getItem("cameralab.debug") === "1";
+  const debug = /[?&]debug/.test(location.search) || safeGet("cameralab.debug") === "1";
   let scene = getScene(station.scene);
-  let camera = getCamera(station.camera || "lab");
-  let settings;
-  let derived;
   let locked = new Set(station.locked || []);
   const narrate = station.mode !== "challenge";
 
@@ -105,6 +123,7 @@ export function mountLab(container, station) {
   container.innerHTML = `
     <div class="lab">
       <div class="lab-main">
+        <div class="monitor-wall" hidden></div>
         <div class="viewport">
           <canvas class="viewport-canvas" aria-label="Simulated camera image"></canvas>
           <div class="reticle" hidden></div>
@@ -116,6 +135,7 @@ export function mountLab(container, station) {
       </div>
       <div class="lab-side">
         <div class="activity"></div>
+        <div class="rig-tabs" role="tablist" hidden></div>
         <div class="control-tabs" role="tablist" hidden></div>
         <div class="controls"></div>
         <p class="feed" aria-live="polite"></p>
@@ -124,6 +144,7 @@ export function mountLab(container, station) {
     </div>`;
 
   const viewport = container.querySelector(".viewport");
+  const wall = container.querySelector(".monitor-wall");
   const canvas = container.querySelector(".viewport-canvas");
   const reticle = container.querySelector(".reticle");
   const recBtn = container.querySelector(".rec-btn");
@@ -131,6 +152,7 @@ export function mountLab(container, station) {
   const chipsEl = container.querySelector(".tool-chips");
   const controlsEl = container.querySelector(".controls");
   const tabsEl = container.querySelector(".control-tabs");
+  const rigTabsEl = container.querySelector(".rig-tabs");
   const feedEl = container.querySelector(".feed");
   const pickersEl = container.querySelector(".lab-pickers");
   const activityEl = container.querySelector(".activity");
@@ -143,17 +165,59 @@ export function mountLab(container, station) {
     console.error(e);
     return () => {};
   }
-  hint.hidden = !(station.controls || []).includes("focus") || locked.has("focus");
   const hud = new Hud(viewport);
   const panels = new ToolPanels(container.querySelector(".tool-panels"));
 
-  // ---------- settings ----------
-  // Station start values belong to the station's own scene; after switching
-  // scenes, start from the new scene's defaults instead.
+  // ---------- rigs (cameras on this station) ----------
+  // A warm-up can hand out a different body each time it's opened
+  // (cameraPool), so the same drill is practiced on whatever's in the bag.
+  const pooled = station.cameraPool ? station.cameraPool[Math.floor(Math.random() * station.cameraPool.length)] : null;
+  const rigDefs = station.rigs || [{ id: "main", camera: pooled || station.camera || "lab", start: station.start }];
+  const rigs = rigDefs.map((def, i) => ({
+    def,
+    id: def.id || `cam${i + 1}`,
+    label: def.label || "",
+    camera: getCamera(def.camera || station.camera || "lab"),
+    slot: i,
+    settings: null,
+    derived: null,
+    stats: null,
+    meter: 0,
+    tile: null,
+    recording: false,
+    recStart: 0,
+  }));
+  let active = Math.max(0, rigs.findIndex((r) => !r.def.reference));
+  // The active rig's state, mirrored into plain variables the rest of this
+  // file (and every narration helper) reads.
+  let camera = rigs[active].camera;
+  let settings;
+  let derived;
+
+  function rigStart(rig) {
+    const own = rig.def.start || (rigs.length === 1 ? station.start : {}) || {};
+    const start = scene.id === station.scene ? own : {};
+    return normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start }, scene), rig.camera, scene);
+  }
+
   function resetSettings(extra = {}) {
-    const start = scene.id === station.scene ? station.start : {};
-    settings = normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start, ...extra }, scene), camera, scene);
-    derived = derive(settings, camera, scene);
+    for (const rig of rigs) {
+      rig.settings = normalizeSettings({ ...rigStart(rig), ...extra }, rig.camera, scene);
+      rig.derived = derive(rig.settings, rig.camera, scene);
+    }
+    loadActive();
+  }
+  function loadActive() {
+    const r = rigs[active];
+    camera = r.camera;
+    settings = r.settings;
+    derived = r.derived;
+  }
+  function saveActive() {
+    const r = rigs[active];
+    r.camera = camera;
+    r.settings = settings;
+    r.derived = derived;
   }
   resetSettings();
 
@@ -169,40 +233,95 @@ export function mountLab(container, station) {
     }
   }
 
-  function change(key, value, { fromDial = false, silent = false } = {}) {
+  // The student (or the AX100 panel) changed something on the active rig.
+  function change(key, value, { fromDial = false, silent = false, fromRing = false } = {}) {
     const prev = settings;
     const prevD = derived;
-    settings = { ...settings, [key]: value };
+    let next = { ...settings, [key]: value };
+    // Grabbing a control by hand takes it off auto, as on a real camera.
+    if (!silent && next.auto?.[key] && !fromRing) next.auto = { ...next.auto, [key]: false };
+    if (key === "aperture" || key === "focal") next = normalizeSettings(next, camera, scene);
+    settings = next;
     derived = derive(settings, camera, scene);
+    saveActive();
     dirty = true;
-    if (!fromDial && dials[key]) dials[key].setValue(value, true);
+    if (!fromDial && dials[key]) dials[key].setValue(settings[key], true);
+    if (key === "focal" && dials.aperture) dials.aperture.setValue(settings.aperture, true);
     if (silent) return;
     if (narrate) {
       const c = describeChange(key, prev, settings, prevD, derived, camera);
       if (c.short && dials[key]) dials[key].flash(c.short === "0" ? "±0" : c.short, c.tone);
-      feedEl.textContent = c.text;
+      let text = c.text;
+      if (key === "focal" && settings.aperture > prev.aperture + 0.01 && !settings.auto?.aperture) {
+        text += ` This zoom can't open wider than f/${settings.aperture} at this focal length, so the iris closed down and the picture got darker — camcorder zooms lose light as they zoom in.`;
+      }
+      if (key === "aperture" && settings.aperture > value + 0.01) {
+        text = `f/${value} isn't available at this zoom — the widest this lens opens here is f/${settings.aperture}. Zoom out to open wider.`;
+      }
+      feedEl.textContent = text;
     }
     interaction();
     activity.onChange(key);
   }
 
+  function setAuto(key, on) {
+    settings = { ...settings, auto: { ...settings.auto, [key]: on } };
+    derived = derive(settings, camera, scene);
+    saveActive();
+    dirty = true;
+    interaction();
+    activity.onChange(`auto:${key}`);
+  }
+
   // ---------- controls ----------
   let dials = {};
   let activeTab = null;
+  let bodyPanel = null;
+  function usesBody() {
+    return !!station.bodyControls && camera.id === "ax100" && !rigs[active].def.reference;
+  }
   function buildControls() {
     Object.values(dials).forEach((d) => d.destroy());
     dials = {};
+    if (bodyPanel) {
+      bodyPanel.destroy();
+      bodyPanel = null;
+    }
     controlsEl.innerHTML = "";
     tabsEl.innerHTML = "";
+    tabsEl.hidden = true;
+    controlsEl.classList.remove("tabbed");
+    hint.hidden = !canFocus();
+    if (rigs[active].def.reference) {
+      controlsEl.innerHTML = `<p class="control-note">This camera isn't yours to change — it's the one to match.</p>`;
+      return;
+    }
+    if (usesBody()) {
+      bodyPanel = new Ax100Panel({
+        camera,
+        get: () => settings,
+        change: (k, v, o) => change(k, v, o),
+        setAuto,
+        note: (k) => activity.onChange(k),
+        say: (t) => (feedEl.textContent = t),
+        oneShotWhite: () => keyLight(scene).kelvin,
+        lcdEl: viewport,
+        panelEl: controlsEl,
+      });
+      hud.setVisible(false);
+      hint.hidden = true;
+      return;
+    }
+    hud.setVisible(toolsOn.has("hud"));
     const list = CONTROL_ORDER.filter((c) => (station.controls || []).includes(c) || locked.has(c));
     for (const name of list) {
       const def = CONTROLS[name];
       if (name === "nd" && camera.nd.kind === "none") {
-        const note = document.createElement("p");
-        note.className = "control-note";
-        note.dataset.control = name;
-        note.textContent = `${camera.name}: no manual ND filter (it's automatic-only).`;
-        controlsEl.appendChild(note);
+        controlsEl.appendChild(note(name, `${camera.name}: no manual ND filter (it's automatic-only).`));
+        continue;
+      }
+      if ((name === "wbab" || name === "wbgm") && !camera.wbShift) {
+        controlsEl.appendChild(note(name, `${camera.name}: no white-balance shift — kelvin only.`));
         continue;
       }
       const continuous = typeof def.continuous === "function" ? def.continuous(camera, scene) : def.continuous;
@@ -248,6 +367,14 @@ export function mountLab(container, station) {
     updateTabLabels();
   }
 
+  function note(name, text) {
+    const p = document.createElement("p");
+    p.className = "control-note";
+    p.dataset.control = name;
+    p.textContent = text;
+    return p;
+  }
+
   function syncTabs() {
     tabsEl.querySelectorAll(".control-tab").forEach((b) => {
       const on = b.dataset.control === activeTab;
@@ -265,7 +392,8 @@ export function mountLab(container, station) {
       const name = b.dataset.control;
       const def = CONTROLS[name];
       const d = dials[def.key];
-      const value = (d ? d.label(settings[def.key]) : "—") + (locked.has(name) ? " 🔒" : "");
+      const autoMark = settings.auto?.[def.key] ? " A" : "";
+      const value = (d ? d.label(settings[def.key]) : "—") + autoMark + (locked.has(name) ? " 🔒" : "");
       setText(b.querySelector("span"), def.label(camera));
       setText(b.querySelector("strong"), value);
     });
@@ -273,6 +401,76 @@ export function mountLab(container, station) {
 
   function setText(el, text) {
     if (el.textContent !== text) el.textContent = text;
+  }
+
+  // ---------- monitor wall (multi-camera stations) ----------
+  function buildWall() {
+    if (rigs.length < 2) return;
+    wall.hidden = false;
+    wall.innerHTML = "";
+    wall.style.setProperty("--tiles", String(Math.min(rigs.length, 3)));
+    rigs.forEach((rig, i) => {
+      const tile = document.createElement("figure");
+      tile.className = "monitor-tile";
+      tile.dataset.rig = String(i);
+      tile.innerHTML = `<div class="monitor-screen"><canvas></canvas></div><figcaption><span class="monitor-name"></span><span class="monitor-cam"></span></figcaption>`;
+      tile.querySelector(".monitor-name").textContent = rig.label || rig.id;
+      if (!rig.def.reference) {
+        tile.classList.add("selectable");
+        tile.addEventListener("click", (e) => {
+          if (i !== active && !e.target.closest(".viewport")) setActiveRig(i);
+        });
+      } else tile.classList.add("reference");
+      rig.tile = tile;
+      rig.canvas2d = tile.querySelector("canvas");
+      wall.appendChild(tile);
+    });
+    placeViewport();
+    buildRigTabs();
+  }
+
+  function placeViewport() {
+    if (rigs.length < 2) return;
+    rigs.forEach((rig, i) => {
+      const screen = rig.tile.querySelector(".monitor-screen");
+      rig.tile.classList.toggle("active", i === active);
+      rig.tile.querySelector(".monitor-cam").textContent = rig.camera.name;
+      if (i === active) {
+        rig.canvas2d.hidden = true;
+        screen.appendChild(viewport);
+      } else rig.canvas2d.hidden = false;
+    });
+  }
+
+  function buildRigTabs() {
+    const editable = rigs.map((r, i) => [r, i]).filter(([r]) => !r.def.reference);
+    rigTabsEl.hidden = editable.length < 2;
+    rigTabsEl.innerHTML = "";
+    for (const [r, i] of editable) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip rig-tab";
+      b.textContent = `Controls: ${r.label || r.id}`;
+      b.classList.toggle("active", i === active);
+      b.setAttribute("aria-selected", String(i === active));
+      b.addEventListener("click", () => setActiveRig(i));
+      rigTabsEl.appendChild(b);
+    }
+  }
+
+  function setActiveRig(i) {
+    if (i === active || rigs[i].def.reference) return;
+    saveActive();
+    active = i;
+    loadActive();
+    placeViewport();
+    buildRigTabs();
+    buildControls();
+    buildPickers();
+    syncRecButton();
+    dirty = true;
+    feedEl.textContent = `Now controlling ${rigs[i].label || rigs[i].id} (${camera.name}).`;
+    activity.onChange("rig");
   }
 
   // ---------- tools ----------
@@ -293,6 +491,7 @@ export function mountLab(container, station) {
         b.setAttribute("aria-pressed", String(toolsOn.has(id)));
         applyTools();
         interaction();
+        activity.onChange(`tool:${id}`);
       });
       chipsEl.appendChild(b);
     }
@@ -301,7 +500,8 @@ export function mountLab(container, station) {
 
   function applyTools() {
     panels.set([...toolsOn].filter((id) => TOOL_INFO[id]?.panel));
-    hud.setVisible(toolsOn.has("hud"));
+    hud.setVisible(toolsOn.has("hud") && !bodyPanel);
+    if (bodyPanel) bodyPanel.setVisible(toolsOn.has("hud") || !toolsAvail.includes("hud"));
     dirty = true;
   }
 
@@ -309,13 +509,12 @@ export function mountLab(container, station) {
   function buildPickers() {
     pickersEl.innerHTML = "";
     const allowedCams = station.cameras ? cameras.filter((c) => station.cameras.includes(c.id)) : cameras;
-    if (station.cameraChoice) {
-      pickersEl.appendChild(
-        picker("Camera", allowedCams, camera.id, (id) => setCamera(id)),
-      );
+    if (station.cameraChoice && !rigs[active].def.reference) {
+      pickersEl.appendChild(picker("Camera", allowedCams, camera.id, (id) => setCamera(id)));
     }
     if (station.sceneChoice) {
-      pickersEl.appendChild(picker("Scene", scenes, scene.id, (id) => setScene(id)));
+      const list = station.scenes ? scenes.filter((s) => station.scenes.some((p) => s.id.startsWith(p))) : scenes;
+      pickersEl.appendChild(picker("Scene", list, scene.id, (id) => setScene(id)));
     }
     const reset = document.createElement("button");
     reset.type = "button";
@@ -355,8 +554,10 @@ export function mountLab(container, station) {
     const focal = canZoom ? settings.focal * (camera.sensor.crop / prev.sensor.crop) : settings.focal;
     settings = normalizeSettings({ ...settings, focal }, camera, scene);
     derived = derive(settings, camera, scene);
+    saveActive();
     buildControls();
     buildPickers();
+    placeViewport();
     dirty = true;
     const tighter = derived.frameZoom > prevD.frameZoom * 1.01;
     const wider = derived.frameZoom < prevD.frameZoom * 0.99;
@@ -373,34 +574,33 @@ export function mountLab(container, station) {
   function setScene(id, extraSettings) {
     scene = getScene(id);
     renderer.setScene(scene);
-    resetSettings({ ...settingsKeep(), ...(extraSettings || {}) });
+    const keep = { fps: settings.fps };
+    resetSettings({ ...keep, ...(extraSettings || {}) });
     buildControls();
     buildPickers();
     dirty = true;
     activity.onChange("scene");
   }
 
-  // Scene changes keep the frame rate but take the new scene's lighting defaults.
-  function settingsKeep() {
-    return { fps: settings.fps };
-  }
-
   // ---------- tap to focus ----------
+  function canFocus() {
+    return ((station.controls || []).includes("focus") || usesBody()) && !locked.has("focus") && !rigs[active].def.reference;
+  }
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     let u = (e.clientX - rect.left) / rect.width;
     let v = (e.clientY - rect.top) / rect.height;
-    const vw = currentView();
+    const vw = currentView(rigs[active]);
     u = vw.x + (u - 0.5) / vw.zoom;
     v = vw.y + (v - 0.5) / vw.zoom;
     hint.hidden = true;
-    const canFocus = (station.controls || []).includes("focus") && !locked.has("focus");
-    if (!canFocus) {
+    if (!canFocus()) {
       feedEl.textContent = "Focus is fixed in this station.";
       return;
     }
     const hit = renderer.pickDepth(u, v);
     if (!hit) return;
+    if (settings.auto?.focus) setAuto("focus", false);
     magCenter = { x: u, y: v };
     reticle.hidden = false;
     reticle.style.left = `${((e.clientX - rect.left) / rect.width) * 100}%`;
@@ -429,39 +629,88 @@ export function mountLab(container, station) {
   // actually sees) and the magnify tool's 3× focus check on top of it.
   let magCenter = { x: 0.65, y: 0.35 };
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  function currentView() {
-    // A tighter shot is aimed at the scene's subject, the way an operator
-    // recomposes as they zoom; the clamp keeps the frame inside the drawn
-    // scene, which at the widest framing leaves it centered with no choice.
-    const frame = derived.frameZoom;
+  function frameView(rig) {
+    // A tighter shot is aimed at the scene's subject (or where this rig's
+    // operator points it), the way an operator recomposes as they zoom; the
+    // clamp keeps the frame inside the drawn scene.
+    const frame = rig.derived.frameZoom;
     const half = 0.5 / frame;
-    const [aimX, aimY] = scene.aim || [0.5, 0.5];
-    const fx = clamp(aimX, half, 1 - half);
-    const fy = clamp(aimY, half, 1 - half);
-    if (!toolsOn.has("magnify")) return { x: fx, y: fy, zoom: frame };
+    const [aimX, aimY] = rig.def.aim || scene.aim || [0.5, 0.5];
+    return { x: clamp(aimX, half, 1 - half), y: clamp(aimY, half, 1 - half), zoom: frame };
+  }
+  function currentView(rig) {
+    const f = frameView(rig);
+    if (rig !== rigs[active] || !toolsOn.has("magnify")) return f;
     // Magnify punches into the shot the camera is actually taking, so its
     // window stays inside that frame rather than the whole scene.
-    const zoom = frame * 3;
+    const half = 0.5 / f.zoom;
+    const zoom = f.zoom * 3;
     const h = 0.5 / zoom;
     return {
-      x: clamp(magCenter.x, fx - half + h, fx + half - h),
-      y: clamp(magCenter.y, fy - half + h, fy + half - h),
+      x: clamp(magCenter.x, f.x - half + h, f.x + half - h),
+      y: clamp(magCenter.y, f.y - half + h, f.y + half - h),
       zoom,
     };
   }
+  function parallaxOf(rig) {
+    const a = rig.def.angle;
+    if (!a) return null;
+    return { shift: a.shift, aimDepth: a.aimDepth || scene.subjects?.performers?.depth || 10 };
+  }
 
-  // ---------- record button (cosmetic, but cameras have one) ----------
+  // ---------- record button (each camera rolls on its own) ----------
   let recording = false;
-  let recStart = 0;
   let recSeconds = 0;
-  recBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    recording = !recording;
-    recStart = performance.now() / 1000 - (recording ? 0 : recSeconds);
-    if (recording) recSeconds = 0;
+  function syncRecButton() {
+    recording = rigs[active].recording;
     recBtn.classList.toggle("on", recording);
     recBtn.setAttribute("aria-pressed", String(recording));
+  }
+  recBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const rig = rigs[active];
+    rig.recording = !rig.recording;
+    rig.recStart = performance.now() / 1000;
+    syncRecButton();
+    activity.onChange(rig.recording ? "record:start" : "record:stop");
   });
+
+  // ---------- automatic camera functions ----------
+  // Auto exposure meters each rig's own rendered frame; autofocus focuses on
+  // whatever is in the middle of the frame. Neither counts as the student
+  // touching anything.
+  let lastAuto = 0;
+  function runAutos(now) {
+    if (now - lastAuto < 90) return;
+    lastAuto = now;
+    rigs.forEach((rig, i) => {
+      let s = rig.settings;
+      let changed = false;
+      if (anyAutoExposure(s) && rig.stats) {
+        const d = aeStep(s, rig.camera, rig.stats.meanLuma);
+        if (Object.keys(d).length) {
+          s = normalizeSettings({ ...s, ...d }, rig.camera, scene);
+          changed = true;
+        }
+      }
+      if (s.auto?.focus) {
+        const v = frameView(rig);
+        const hit = renderer.pickDepth(v.x, v.y);
+        if (hit && Math.abs(Math.log(hit.depth / s.focus)) > 0.01) {
+          s = { ...s, focus: s.focus * (hit.depth / s.focus) ** 0.5 };
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      rig.settings = s;
+      rig.derived = derive(s, rig.camera, scene);
+      if (i === active) {
+        loadActive();
+        for (const [k, d] of Object.entries(dials)) d.setValue(settings[k], true);
+      }
+      dirty = true;
+    });
+  }
 
   // ---------- render loop ----------
   let raf = 0;
@@ -487,7 +736,9 @@ export function mountLab(container, station) {
 
   function tick() {
     stepFocusAnim();
-    const now = (performance.now() - t0) / 1000;
+    const nowMs = performance.now();
+    runAutos(nowMs);
+    const now = (nowMs - t0) / 1000;
     const fi = Math.floor(now / derived.captureInterval);
     if (fi === lastFrame && !dirty) {
       if (toolsOn.has("zebras")) renderer.represent({ zebra: 0.95, peaking: toolsOn.has("peaking") });
@@ -496,13 +747,44 @@ export function mountLab(container, station) {
     lastFrame = fi;
     dirty = false;
     sizeCanvas();
-    const wantScopes = panels.needsScope() || statWaiters.length > 0 || frameCount % 10 === 0;
+    frameCount++;
+    // Other rigs first (copied out to their monitors), the active one last
+    // so it's what stays on the main canvas.
+    rigs.forEach((rig, i) => {
+      if (i === active || !rig.canvas2d) return;
+      if (frameCount % 2 && rig.stats) return;
+      const sc = renderer.render({
+        settings: rig.settings,
+        derived: rig.derived,
+        time: fi * rig.derived.captureInterval,
+        frameIndex: frameCount,
+        view: currentView(rig),
+        parallax: parallaxOf(rig),
+        slot: rig.slot,
+        wantScopes: true,
+      });
+      if (sc) {
+        rig.stats = scopeStats(sc);
+        rig.meter = cameraMeter(rig.stats.meanLuma);
+      }
+      const c = rig.canvas2d;
+      if (c.width !== canvas.width) {
+        c.width = canvas.width;
+        c.height = canvas.height;
+      }
+      c.getContext("2d").drawImage(canvas, 0, 0);
+    });
+    rigs.forEach((r) => r.tile?.classList.toggle("rec", r.recording));
+    const rig = rigs[active];
+    const wantScopes = panels.needsScope() || statWaiters.length > 0 || frameCount % 5 === 0 || anyAutoExposure(settings);
     const scope = renderer.render({
       settings,
       derived,
       time: fi * derived.captureInterval,
-      frameIndex: ++frameCount,
-      view: currentView(),
+      frameIndex: frameCount,
+      view: currentView(rig),
+      parallax: parallaxOf(rig),
+      slot: rig.slot,
       zebra: toolsOn.has("zebras") ? 0.95 : 0,
       peaking: toolsOn.has("peaking"),
       wantScopes,
@@ -510,11 +792,15 @@ export function mountLab(container, station) {
     if (scope) {
       lastScope = scope;
       lastStats = scopeStats(scope);
+      rig.stats = lastStats;
+      rig.meter = cameraMeter(lastStats.meanLuma);
       statWaiters.forEach((fn) => fn(lastStats));
       statWaiters = [];
     }
-    if (recording) recSeconds = performance.now() / 1000 - recStart;
-    hud.update(settings, derived, camera, { recording, recSeconds });
+    recSeconds = recording ? performance.now() / 1000 - rig.recStart : 0;
+    const time = timecode(recSeconds);
+    if (bodyPanel) bodyPanel.update({ recording, time, cameraMeter: rig.meter });
+    else hud.update(settings, derived, camera, { recording, recSeconds });
     updateTabLabels();
     panels.update({
       settings,
@@ -523,16 +809,43 @@ export function mountLab(container, station) {
       camera,
       scope: lastScope,
       stats: lastStats,
+      cameraMeter: anyAutoExposure(settings) ? rig.meter : null,
       perf: { ...renderer.stats, w: renderer.outW, h: renderer.outH },
       activity: activity.debugState?.(),
     });
   }
 
+  function timecode(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
   // ---------- activity ----------
+  function rigCtx() {
+    const out = {};
+    rigs.forEach((r, i) => {
+      const s = i === active ? settings : r.settings;
+      const d = i === active ? derived : r.derived;
+      out[r.id] = { settings: s, derived: d, camera: i === active ? camera : r.camera, stats: r.stats, meter: r.meter, view: frameView({ ...r, derived: d }), def: r.def, recording: r.recording };
+    });
+    return out;
+  }
   const api = {
     el: activityEl,
     station,
-    ctx: () => ({ settings, derived, camera, scene, stats: lastStats }),
+    ctx: () => ({
+      settings,
+      derived,
+      camera,
+      scene,
+      stats: lastStats,
+      view: frameView(rigs[active]),
+      rigs: rigCtx(),
+      activeRig: rigs[active].id,
+      recording,
+      cameraMeter: rigs[active].meter,
+    }),
     // Fresh scope stats for the current settings (used on challenge submit).
     freshStats: () =>
       new Promise((resolve) => {
@@ -542,9 +855,10 @@ export function mountLab(container, station) {
     setScene: (id, extra) => setScene(id, extra),
     setCamera: (id) => setCamera(id),
     apply: (partial) => {
-      for (const [k, v] of Object.entries(partial)) change(k, v, { silent: true });
-      settings = normalizeSettings(settings, camera, scene);
+      settings = normalizeSettings({ ...settings, ...partial }, camera, scene);
       derived = derive(settings, camera, scene);
+      saveActive();
+      dirty = true;
       buildControls();
     },
     unlock: (names) => {
@@ -568,7 +882,8 @@ export function mountLab(container, station) {
         change(key, value);
         buildControls();
       },
-      get: () => ({ settings, derived, camera: camera.id, scene: scene.id, stats: lastStats }),
+      auto: (key, on = true) => setAuto(key, on),
+      get: () => ({ settings, derived, camera: camera.id, scene: scene.id, stats: lastStats, rigs: rigCtx() }),
       // Render one frame now, even in a background tab (rAF is paused there).
       frame: () => {
         dirty = true;
@@ -576,6 +891,7 @@ export function mountLab(container, station) {
       },
       setScene,
       setCamera,
+      rig: (i) => setActiveRig(i),
       magnify: (x, y) => {
         magCenter = { x, y };
         toolsOn.add("magnify");
@@ -589,7 +905,15 @@ export function mountLab(container, station) {
     };
   }
 
+  current.get = () => {
+    const sum = [`${settings.fps}p`, `1/${settings.shutter}`, `f/${settings.aperture}`, `gain ${settings.gainStops.toFixed(2)} st`, `ND ${settings.nd}`, settings.wbMode === "auto" ? "AWB" : `${Math.round(settings.wb)}K`];
+    if (settings.wbAB || settings.wbGM) sum.push(`shift ${settings.wbAB}/${settings.wbGM}`);
+    const autos = Object.entries(settings.auto || {}).filter(([, v]) => v).map(([k]) => k);
+    if (autos.length) sum.push(`auto: ${autos.join(",")}`);
+    return { camera: camera.name, scene: scene.id, settings: sum.join(" · ") };
+  };
   renderer.setScene(scene);
+  buildWall();
   buildControls();
   buildChips();
   buildPickers();
@@ -598,9 +922,19 @@ export function mountLab(container, station) {
   loop();
 
   return function unmount() {
+    current.get = null;
     cancelAnimationFrame(raf);
     Object.values(dials).forEach((d) => d.destroy());
+    if (bodyPanel) bodyPanel.destroy();
     activity.stop?.();
     renderer.dispose();
   };
+}
+
+function safeGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
 }

@@ -599,3 +599,262 @@ main:has(.stage-lab:not([hidden])) {
   .lab-main { position: sticky; top: 0.5rem; }
   .lab-side { max-height: 92vh; overflow-y: auto; }
 }
+
+/* ---------- monitor wall (stations with several cameras) ---------- */
+
+.monitor-wall {
+  display: grid;
+  grid-template-columns: repeat(var(--tiles, 2), minmax(0, 1fr));
+  gap: 0.5rem;
+  background: #050507;
+  padding: 0.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.monitor-tile {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.monitor-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  outline: 2px solid #2a2d38;
+  border-radius: 4px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.monitor-screen > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.monitor-screen > .viewport {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+.monitor-tile.active .monitor-screen { outline-color: var(--accent, var(--accent-default)); }
+.monitor-tile.selectable:not(.active) { cursor: pointer; }
+.monitor-tile.selectable:not(.active):hover .monitor-screen { outline-color: #555b70; }
+.monitor-tile figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  letter-spacing: 0.03em;
+}
+.monitor-name { color: var(--text); font-weight: 600; }
+.monitor-tile.reference .monitor-name::after { content: " · reference"; color: var(--text-dim); font-weight: 400; }
+.monitor-tile.active .monitor-name::after { content: " · your controls"; color: var(--accent, var(--accent-default)); font-weight: 400; }
+/* On a phone, one monitor per row: the active one has to be big enough to
+   tap its touchscreen, and color is easier to compare full width. */
+@media (max-width: 560px) {
+  .monitor-wall { grid-template-columns: minmax(0, 1fr); padding: 0.3rem; gap: 0.4rem; }
+}
+.rig-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.rig-tab.active {
+  border-color: var(--accent, var(--accent-default));
+  background: color-mix(in srgb, var(--accent, var(--accent-default)) 20%, transparent);
+}
+
+/* ---------- camera body replicas (AX100) ---------- */
+
+.body-panel {
+  background: linear-gradient(180deg, #2b2c30, #1d1e22);
+  border: 1px solid #3a3b42;
+  border-radius: var(--radius-md);
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.6rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.body-panel-title {
+  margin: 0;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-size: 0.9rem;
+}
+.body-panel-title span { font-weight: 500; letter-spacing: 0; color: var(--text-dim); }
+.ax-buttons, .ax-row, .ax-menu-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.hw-btn {
+  font: 600 0.78rem/1 "Barlow Condensed", "Arial Narrow", sans-serif;
+  letter-spacing: 0.06em;
+  color: #e8e8ec;
+  background: linear-gradient(180deg, #3a3b42, #26272c);
+  border: 1px solid #4a4b54;
+  border-bottom-color: #15161a;
+  border-radius: 7px;
+  padding: 0.55rem 0.7rem;
+  min-height: 2.4rem;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #0d0d10;
+}
+.hw-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #0d0d10; }
+.hw-btn.on { border-color: #ff9a3c; color: #ffb36b; }
+.hw-btn.auto::after { content: " A"; color: #8fd0ff; }
+.hw-manual { color: #ffd166; }
+.hw-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #121316;
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid #3a3b42;
+}
+.hw-switch-label { font: 600 0.7rem "Barlow Condensed", sans-serif; letter-spacing: 0.08em; padding: 0 0.4rem; color: var(--text-dim); }
+.hw-switch button {
+  font: 600 0.78rem "Barlow Condensed", sans-serif;
+  color: #cfd0d6;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.45rem 0.55rem;
+  min-width: 2.2rem;
+  cursor: pointer;
+}
+.hw-switch button[aria-checked="true"] { background: #e8e8ec; color: #111; }
+.hw-rocker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #121316;
+  border: 1px solid #3a3b42;
+  border-radius: 999px;
+  padding: 3px;
+  font: 600 0.65rem "Barlow Condensed", sans-serif;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  touch-action: none;
+}
+.hw-rocker button {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 1px solid #4a4b54;
+  background: linear-gradient(180deg, #3a3b42, #26272c);
+  color: #fff;
+  font: 700 0.9rem "Barlow Condensed", sans-serif;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ax-ring-idle { margin: 0; font-size: 0.85rem; color: var(--text-dim); padding: 0.6rem 0.2rem; }
+.ring-dial { --dial-accent: #ff9a3c; background: repeating-linear-gradient(90deg, #1a1b1f 0 3px, #22232a 3px 6px); }
+.ax-wbmenu {
+  background: #0d0e11;
+  border: 1px solid #3a3b42;
+  border-radius: 10px;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.ax-menu-title { margin: 0; font: 600 0.75rem "Barlow Condensed", sans-serif; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
+
+/* the AX100's touchscreen, drawn over the picture */
+.ax-lcd {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #fff;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-weight: 600;
+  font-size: clamp(9px, 3cqw, 19px);
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+  font-variant-numeric: tabular-nums;
+}
+.ax-lcd > div { position: absolute; display: flex; gap: 0.6em; align-items: center; }
+.ax-top { top: 3%; left: 3%; right: 3%; justify-content: space-between; }
+.ax-left { left: 2.5%; top: 22%; flex-direction: column; align-items: flex-start; gap: 0.4em; }
+.ax-bottom { bottom: 3%; left: 50%; transform: translateX(-50%); gap: 0.5em; }
+.ax-rec { color: #ff4455; }
+.ax-stby { color: #7dff9a; }
+.ax-box { border: 1.5px solid currentColor; padding: 0 0.35em; border-radius: 3px; }
+.ax-item {
+  pointer-events: auto;
+  font: inherit;
+  color: inherit;
+  text-shadow: inherit;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0.35em;
+  padding: 0.15em 0.5em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  cursor: pointer;
+  min-height: 1.9em;
+}
+.ax-item small { font-size: 0.62em; opacity: 0.75; letter-spacing: 0.05em; }
+.ax-item.sel { border-color: #ff9a3c; background: rgba(255, 154, 60, 0.28); }
+.ax-a { color: #8fd0ff; font-size: 0.8em; border: 1px solid #8fd0ff; border-radius: 2px; padding: 0 0.15em; line-height: 1; }
+
+/* ---------- camera's own meter (auto exposure) ---------- */
+.meter-camera {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1.5px;
+  background: #8fd0ff;
+  border-radius: 2px;
+  box-shadow: 0 0 6px #8fd0ff;
+}
+.meter-camera-text { margin: 0.3rem 0 0; font-size: 0.8rem; color: #8fd0ff; }
+.monitor-wall[hidden], .rig-tabs[hidden], .ax-wbmenu[hidden], .ax-lcd[hidden], .meter-camera[hidden], .meter-camera-text[hidden] { display: none; }
+
+@media (min-width: 900px) {
+  .lab:has(.monitor-wall:not([hidden])) { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
+}
+.monitor-tile.rec .monitor-name::before { content: "● "; color: #ff4455; }
+
+/* ---------- Salmon livestream: multiview + switcher ---------- */
+.mv-frame {
+  background: #050507;
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.mv-canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; cursor: pointer; border-radius: 4px; }
+.mv-caption { margin: 0.35rem 0 0; font: 600 0.75rem "Barlow Condensed", sans-serif; letter-spacing: 0.06em; color: var(--text-dim); }
+.atem-panel {
+  margin-top: 0.8rem;
+  background: linear-gradient(180deg, #24262d, #18191e);
+  border: 1px solid #3a3b42;
+  border-radius: var(--radius-md);
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.atem-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.atem-label { width: 5.2rem; font: 600 0.75rem "Barlow Condensed", sans-serif; letter-spacing: 0.08em; color: var(--text-dim); }
+.atem-buttons { display: grid; grid-template-columns: repeat(9, minmax(2.1rem, 1fr)); gap: 0.3rem; flex: 1; min-width: 0; }
+.atem-btn {
+  font: 700 0.85rem "Barlow Condensed", sans-serif;
+  color: #dfe2ea;
+  background: #2e3038;
+  border: 1px solid #44464f;
+  border-radius: 6px;
+  min-height: 2.4rem;
+  cursor: pointer;
+  padding: 0 0.6rem;
+}
+.atem-btn.lit-red { background: #d8252e; border-color: #ff6a70; color: #fff; box-shadow: 0 0 12px rgba(255, 60, 70, 0.6); }
+.atem-btn.lit-green { background: #1a9c3c; border-color: #5ce089; color: #fff; box-shadow: 0 0 12px rgba(60, 220, 110, 0.5); }
+.atem-actions .atem-cut, .atem-actions .atem-auto { min-width: 4.5rem; }
+.atem-spacer { flex: 1; }
+.atem-onair { min-width: 6rem; letter-spacing: 0.08em; }
+@media (max-width: 560px) {
+  .atem-label { width: 100%; }
+  .atem-buttons { grid-template-columns: repeat(5, 1fr); }
+}
+@media (max-width: 560px) {
+  .monitor-tile.active { order: -1; }
+}

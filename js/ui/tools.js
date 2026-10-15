@@ -66,15 +66,28 @@ const panels = {
       <div class="meter-scale" role="img">
         <div class="meter-zone"></div>
         ${[-3, -2, -1, 0, 1, 2, 3].map((v) => `<span class="meter-mark" style="left:${((v + 3) / 6) * 100}%">${v > 0 ? "+" + v : v === 0 ? "0" : "−" + -v}</span>`).join("")}
+        <div class="meter-camera" hidden></div>
         <div class="meter-needle"></div>
       </div>
-      <p class="meter-text"></p>`;
+      <p class="meter-text"></p>
+      <p class="meter-camera-text" hidden></p>`;
     const needle = wrap.querySelector(".meter-needle");
     const text = wrap.querySelector(".meter-text");
     const scale = wrap.querySelector(".meter-scale");
+    const camMark = wrap.querySelector(".meter-camera");
+    const camText = wrap.querySelector(".meter-camera-text");
     return {
       wrap,
-      update({ derived }) {
+      update({ derived, cameraMeter }) {
+        // On auto exposure, also show what the CAMERA thinks: it meters the
+        // whole frame's average, not the performer this meter is judging.
+        const hasCam = cameraMeter != null;
+        camMark.hidden = camText.hidden = !hasCam;
+        if (hasCam) {
+          const cm = Math.max(-3.3, Math.min(3.3, cameraMeter));
+          camMark.style.left = `${((cm + 3) / 6) * 100}%`;
+          camText.textContent = `Blue: the camera's own meter (whole-frame average) says ${Math.abs(cameraMeter) < 0.3 ? "“looks fine”" : cameraMeter > 0 ? "too bright" : "too dark"}.`;
+        }
         const e = derived.exposureStops;
         const c = Math.max(-3.3, Math.min(3.3, e));
         needle.style.left = `${((c + 3) / 6) * 100}%`;

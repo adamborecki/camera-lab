@@ -11,6 +11,22 @@
 //                      treated as gain.baseIso. 6 dB ≈ 1 stop.
 // nd.kind              "internal" (built-in wheel/switch), "external"
 //                      (screw-on filters named by filter factor), or "none".
+// lens (optional)      the zoom lens on a real body, in 35mm-EQUIVALENT mm:
+//                      { name, wide, tele, apWide, apTele }. A camcorder's
+//                      widest f-number gets slower as it zooms in (AX100:
+//                      f/2.8 wide, f/4.5 tele), so the iris can't open past
+//                      maxApertureAt(focal). Generic bodies leave it out and
+//                      can frame anything the scene allows.
+// wbShift (optional)   fine color trim on top of kelvin: { ab: max steps on
+//                      the amber–blue axis, gm: max steps green–magenta,
+//                      style: how the body writes it ("sony" A5 G2,
+//                      "lumix" B4 G/M0) }.
+// colorBias            how this body's color science leans, as RGB gains
+//                      on a correctly white-balanced picture. ILLUSTRATIVE,
+//                      not measured: small enough to see side by side, which
+//                      is the point — two brands at the same kelvin don't
+//                      quite match, and matching is done by eye, not by number.
+// verify               open questions about this body, listed in the README.
 
 const STANDARD_SHUTTERS = [
   8, 15, 24, 25, 30, 40, 48, 50, 60, 80, 100, 120, 125, 160, 200, 250, 320, 400, 500, 640, 800,
@@ -58,6 +74,11 @@ export const cameras = [
     blurb: "4K Handycam with a 1-inch sensor. Gain in dB, ND switch OFF / 1 / 2 / 3.",
     sensor: { name: '1.0" type', crop: 2.7, fullWell: 8000, readNoise: 3 },
     aperture: { min: 2.8, max: 11 },
+    // Sony spec sheet: f=9.3–111.6 mm, 29.0–348.0 mm equivalent (16:9),
+    // F2.8–F4.5; manual iris F2.8–F11.
+    lens: { name: "Zeiss Vario-Sonnar T* 12×", wide: 29, tele: 348, apWide: 2.8, apTele: 4.5 },
+    wbShift: { ab: 7, gm: 7, style: "sony" },
+    colorBias: [1, 1, 1],
     gain: { mode: "db", baseIso: 100, step: 3, max: 33 },
     shutters: [8, 15, 30, 60, 90, 100, 120, 125, 180, 250, 350, 500, 725, 1000, 1500, 2000, 3000, 4000, 6000, 10000],
     shutterDisplay: "denominator",
@@ -79,7 +100,10 @@ export const cameras = [
     name: "Canon VIXIA HF G50",
     blurb: "Small-sensor 4K camcorder. Gain 0–24 dB in 1 dB steps; deep depth of field.",
     sensor: { name: '1/2.3" type', crop: 5.6, fullWell: 3000, readNoise: 3 },
-    aperture: { min: 2.8, max: 8 },
+    // Canon spec sheet: f/1.8–2.8, 29.3–601 mm equivalent in UHD 4K (IS off).
+    aperture: { min: 1.8, max: 8 },
+    lens: { name: "Canon 20× zoom", wide: 29.3, tele: 601, apWide: 1.8, apTele: 2.8 },
+    colorBias: [1.01, 1, 0.99],
     gain: { mode: "db", baseIso: 100, step: 1, max: 24 },
     shutters: [
       8, 10, 12, 15, 20, 24, 25, 30, 40, 48, 50, 60, 75, 90, 100, 120, 150, 180, 250, 300, 360, 500, 600,
@@ -87,7 +111,9 @@ export const cameras = [
     ],
     shutterDisplay: "fraction",
     fps: [24, 30, 60],
-    // The G50's ND is Automatic / Off only — no manual strengths to choose.
+    // Canon lists a built-in multi-strength ND; this sim treats it as
+    // automatic only (no strength you pick). Unverified: whether the body
+    // offers manual ND steps.
     nd: { kind: "none", steps: [{ stops: 0, label: "OFF" }] },
     hud: "canon",
   },
@@ -96,7 +122,13 @@ export const cameras = [
     name: "Panasonic GH5",
     blurb: "Micro Four Thirds mirrorless. ISO from 200, no built-in ND — screw-on filters.",
     sensor: { name: "Micro Four Thirds", crop: 2.0, fullWell: 12000, readNoise: 3 },
-    aperture: { min: 2.8, max: 22 },
+    // The lens Chapman's GH5s wear: Lumix G Vario 14–140mm f/3.5–5.6
+    // (28–280 mm equivalent). Nothing wider is owned yet — see the lens
+    // coverage tool for candidates.
+    aperture: { min: 3.5, max: 22 },
+    lens: { name: "Lumix G Vario 14–140mm f/3.5–5.6", wide: 28, tele: 280, apWide: 3.5, apTele: 5.6 },
+    wbShift: { ab: 9, gm: 9, style: "lumix" },
+    colorBias: [1.025, 1.01, 0.965],
     gain: { mode: "iso", baseIso: 200, min: 200, max: 12800 },
     shutters: STANDARD_SHUTTERS,
     shutterDisplay: "fraction",
@@ -108,6 +140,7 @@ export const cameras = [
     id: "ff",
     name: "Full-Frame Mirrorless",
     blurb: "A generic full-frame body. Big sensor: shallowest focus, cleanest high ISO.",
+    colorBias: [1, 1, 1],
     sensor: { name: "Full frame", crop: 1.0, fullWell: 48000, readNoise: 4 },
     aperture: { min: 1.4, max: 22 },
     gain: { mode: "iso", baseIso: 100, min: 100, max: 25600 },
@@ -119,6 +152,31 @@ export const cameras = [
   },
 ];
 
+// Salmon Recital Hall's installed PTZ cameras. Run from AJA RovoControl on
+// the booth Mac; in a normal gig nobody touches exposure, and the hall's
+// static wide runs on auto white balance — which is why the AX100 backup has
+// its own Salmon numbers (3800K A5 G2) to match it.
+export const rovocam = {
+  id: "rovocam",
+  name: "AJA RovoCam",
+  blurb: "Installed PTZ camera, 1/2.3-inch sensor, 20× zoom. Controlled from RovoControl, not from the camera.",
+  // AJA spec sheet: Sony FCB-ER8300 block, 1/2.3" CMOS, iris F1.8–2.0 per
+  // AJA (unverified at tele). RovoControl shows iris to F14, gain 0–33 dB.
+  sensor: { name: '1/2.3" type', crop: 5.6, fullWell: 3000, readNoise: 3 },
+  aperture: { min: 1.8, max: 14 },
+  lens: { name: "20× zoom block", wide: 25, tele: 500, apWide: 1.8, apTele: 2.0 },
+  gain: { mode: "db", baseIso: 100, step: 3, max: 33 },
+  shutters: [30, 60, 90, 100, 120, 125, 180, 250, 350, 500, 725, 1000, 1500, 2000, 3000, 4000, 6000, 10000],
+  shutterDisplay: "fraction",
+  fps: [30, 60],
+  nd: { kind: "none", steps: [{ stops: 0, label: "OFF" }] },
+  colorBias: [0.99, 1, 1.01],
+  hud: "clean",
+  hidden: true,
+};
+
+export const allCameras = [...cameras, rovocam];
+
 export function getCamera(id) {
-  return cameras.find((c) => c.id === id) || cameras[0];
+  return allCameras.find((c) => c.id === id) || cameras[0];
 }
