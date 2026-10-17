@@ -19,6 +19,7 @@ Stations are grouped into weekly homeworks (the `SECTIONS` in `data/stations.js`
 | Homework 2 — Go Further | white balance, ND, focus & depth of field, sensor size, three challenges |
 | Homework 3 — Standard Gear Kit & Salmon | warm-ups on a random body (spaced retrieval of HW1–2), the AX100's real controls and traps, framing a static wide, matching cameras (AX100↔AX100, GH5→AX100, AX100→RovoCam), the Salmon livestream, a two-camera gig challenge |
 | Homework 4 — Musco: Many Cameras, One Look | warm-ups from HW3; one RP150 controller for five UE150 PTZs on a multiview; reading the controller's screen against the house defaults; R/B gain vs gain; setting exposure under the brightest cue (not work lights); shading four cameras to match the static wide |
+| Free play | the Playground (everything unlocked), and **Lens Shopping**: the GH5 with the owned 14–140 and three wider candidates (Lumix 12–60, Olympus 9–18, Laowa 7.5) from the booth, the center aisle and down front in Salmon — find the longest lens that still fits everyone |
 
 Planned next (not built): PTZ operation (joystick, zoom, focus, taking a call), switching on the ATEM Constellation (program/preview, calling shots, ISOs), and a Musco capstone. Pedagogy notes and the arc are in [`docs/COURSE_PLAN.md`](docs/COURSE_PLAN.md).
 
@@ -37,7 +38,7 @@ The original design brief is in [`docs/design-handoff.txt`](docs/design-handoff.
 ```bash
 npm test                     # node --test: physics, station data, every challenge is passable
 python3 -m http.server 8124 &
-node tools/smoke.mjs         # headless Chromium: every station, desktop + phone, AX100 & livestream walkthroughs
+node tools/smoke.mjs         # headless Chromium: every station, desktop + phone, AX100, livestream & lens-shopping walkthroughs
 ```
 
 `npm test` brute-forces each single-camera challenge on every body it can hand out, and checks a known-good answer for each multi-camera one — an impossible step has shipped before. See [`CLAUDE.md`](CLAUDE.md).
@@ -69,7 +70,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 ### Scenes
 
 - **Concert Stage** and **Sunny Park** — the original illustrated scenes.
-- **Salmon Recital Hall** (`js/scenes/salmon.js`) — the hall from the booth, drawn in real perspective (`js/scenes/hall-kit.js` projects every wall, riser and performer from meters) after the instructor's photos in `docs/reference/`. Twelve programs: solo piano, violin/clarinet/brass with piano, piano duo, solo guitar, choir on risers, mariachi, percussion setup, early music in low light, chamber orchestra, singer with string quartet. Exposure is set so the AX100's Salmon numbers (F4 · 3 dB · 1/60) are correct.
+- **Salmon Recital Hall** (`js/scenes/salmon.js`) — the hall from the booth, drawn in real perspective (`js/scenes/hall-kit.js` projects every wall, riser and performer from meters) after the instructor's photos in `docs/reference/`. Fourteen programs: solo piano, violin/clarinet/brass with piano, piano duo, solo guitar, choir on risers, mariachi, vocal jazz (singers at mics with piano, bass, drums, guitar), CME (band with keys, guitars, drums, singers, horn, wedges and PA), percussion setup, early music in low light, chamber orchestra, singer with string quartet. Exposure is set so the AX100's Salmon numbers (F4 · 3 dB · 1/60) are correct.
 - **Auditorium** — the same programs in a generic dark proscenium hall: a Standard Gear Kit gig anywhere, and the room where auto exposure fails.
 
 ### Camera bodies with their real controls
@@ -107,6 +108,7 @@ Not yet checked on the real gear — confirm before treating as instructions:
 - RovoCam: its exposure settings in Salmon (sim: F4 · 3 dB · 1/60 — unknown) and the iris range at tele.
 - Salmon's AWB result (`scene.awb` = 3800K A5 G2) encodes the instructor's observation that an AX100 at those numbers matches the RovoCam — not a measurement.
 - Each body's `colorBias` is illustrative, not measured.
+- Salmon's dimensions (booth ~19 m from the back wall, stage ~17 m wide, booth eye height 5 m) are estimated from photos, not measured. Lens Shopping's answers (booth: anything; aisle at 5 m: 24 mm or wider; down front: 18 mm or wider) depend on them — a tape measure from the booth window and the aisle to the stage would settle which lens is worth buying.
 - Salmon livestream: the multiview layout beyond the booth photo, Camera 1 vs 2 assignment, and the Production Studio 4K → Mini Extreme ISO chain.
 - Musco: the camera map (sim: 1 flutes house left, 2 balcony wide, 3 static wide, 4 brass house left, 5 horns & percussion house right — only "3 is the static wide" is confirmed); RP150 knob ranges and step sizes (sim: ±200; R/B gain step 0.15% of the channel, pedestal step 0.15% of full scale — teaching values); gain on F1; what holding A/3200K does; the stage's real color temperature and the pre-show work lights (sim: 3200K concert, ~4300K work lights about 2⅓ stops darker).
 

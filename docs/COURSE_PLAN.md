@@ -57,10 +57,17 @@ Micro Four Thirds: equivalent = 2 × focal length. Prices are rough (Oct 2026); 
 
 | Lens | Aperture | 35 mm eq. | Notes |
 |---|---|---|---|
+| Panasonic Lumix G Vario 12–60mm f/3.5–5.6 | variable | 24–120 mm | cheap (often a kit lens; roughly $200–400); only a little wider than the 14–140, but keeps a useful zoom |
 | Olympus M.Zuiko 9–18mm f/4–5.6 | variable | 18–36 mm | cheapest autofocus option (often ~$300–450 used); takes 52 mm filters |
 | Panasonic Lumix 7–14mm f/4 | constant | 14–28 mm | ~$800–1,100 new, less used; bulbous front, no screw-on ND |
 | Laowa 7.5mm f/2 | prime | 15 mm | ~$450–500; manual focus (fine for a static wide); takes filters |
 | Panasonic Leica 8–18mm f/2.8–4 | variable | 16–36 mm | ~$1,000; best all-rounder if budget allows |
+
+The **Lens Shopping** station (Free play) puts the 12–60, 9–18 and Laowa 7.5 on the GH5 in Salmon. In
+the sim's (estimated) Salmon, the booth needs nothing wider than the 14–140; a camera in the center aisle
+~5 m from the stage needs ~24 mm for the choir; down front at the stage edge needs ~18 mm for the
+mariachi. So: wider only pays off if the GH5 is going to stand close — which is a question about where
+it goes, not about lenses.
 
 Sources: [Panasonic 8–18 vs 7–14](https://mirrorlesscomparison.com/micro-four-thirds-lenses/panasonic-leica-8-18mm-f2-8-4-vs-lumix-7-14mm-f4/),
 [Laowa 7.5 vs MFT wide zooms](https://mirrorlesscomparison.com/micro-four-thirds-lenses/laowa-7-5mm-mft-wide-angle-zooms/).

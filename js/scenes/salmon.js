@@ -313,6 +313,50 @@ export const PROGRAMS = {
     },
     movers: ["conductor"],
   },
+  "vocal-jazz": {
+    title: "Vocal jazz",
+    items: () => {
+      const out = [];
+      // singers in a shallow arc at mic stands, rhythm section behind
+      [-3.6, -2.2, -0.8, 0.6, 2.0, 3.4].forEach((x, i) => {
+        const z = 12.0 + Math.abs(x) * 0.08;
+        out.push(T(z - 0.25, x, (ctx, cam) => K.micStand(ctx, cam, x + 0.15, z - 0.35, 1.5)));
+        out.push(P({ x, z, pose: "stand", inst: i % 2 ? "handMic" : "singFree", dress: i % 3 === 1, look: L(700 + i, { long: i % 2 === 0 }) }));
+      });
+      out.push(...pianoWithPlayer(-4.6, 15.0, 710, { len: 1.8 }));
+      out.push(P({ x: -0.8, z: 15.4, pose: "stand", inst: "bass", look: L(711) }));
+      out.push(T(15.8, 1.6, (ctx, cam) => K.drumKit(ctx, cam, 1.6, 15.8)));
+      out.push(P({ x: 1.6, z: 16.3, pose: "sit", look: L(712) }));
+      out.push(T(15.4, 4.2, (ctx, cam) => K.amp(ctx, cam, 4.6, 15.6)));
+      out.push(T(15.0, 4.0, (ctx, cam) => K.chair(ctx, cam, 3.9, 15.0)));
+      out.push(P({ x: 3.9, z: 14.8, pose: "sit", inst: "guitar", look: L(713) }));
+      for (const [x, z, r] of [[-2.4, 11.0, 0.3], [0.2, 11.0, 0], [2.6, 11.0, -0.3]]) out.push(T(z, x, (ctx, cam) => K.wedge(ctx, cam, x, z, r)));
+      return out;
+    },
+  },
+  cme: {
+    title: "Commercial Music Ensemble",
+    items: () => {
+      const out = [];
+      out.push(T(17.6, -5.2, (ctx, cam) => K.speakerOnPole(ctx, cam, -6.6, 12.0)));
+      out.push(T(17.6, 5.2, (ctx, cam) => K.speakerOnPole(ctx, cam, 6.6, 12.0)));
+      out.push(T(16.2, 0, (ctx, cam) => K.drumKit(ctx, cam, 0, 16.2)));
+      out.push(P({ x: 0, z: 16.7, pose: "sit", look: L(800, { top: "#1d2a3a" }) }));
+      out.push(T(15.6, -2.4, (ctx, cam) => K.amp(ctx, cam, -2.6, 16.0, 0.7, 0.75)));
+      out.push(T(15.6, 2.6, (ctx, cam) => K.amp(ctx, cam, 2.8, 16.0, 0.8, 0.9)));
+      out.push(P({ x: -2.4, z: 14.6, pose: "stand", inst: "eguitar", look: L(801, { top: "#3a3a40" }) }));
+      out.push(P({ x: 2.6, z: 14.6, pose: "stand", inst: "eguitar", color: "#d8d2c0", bass: true, look: L(802, { top: "#5a1e2a" }) }));
+      out.push(T(14.4, -5.0, (ctx, cam) => K.keyboard(ctx, cam, -5.0, 14.6)));
+      out.push(P({ x: -5.0, z: 15.2, pose: "stand", look: L(803, { top: "#2a3a2a" }) }));
+      [-1.0, 1.0].forEach((x, i) => {
+        out.push(T(12.1, x, (ctx, cam) => K.micStand(ctx, cam, x + 0.1, 12.0, 1.55)));
+        out.push(P({ x, z: 12.4, pose: "stand", inst: "handMic", look: L(804 + i, { top: i ? "#6a2a6a" : "#e8e2d4", long: !i }) }));
+      });
+      out.push(P({ x: 4.6, z: 13.4, pose: "stand", inst: "trumpet", look: L(806) }));
+      for (const [x, z, r] of [[-2.0, 11.2, 0.25], [1.4, 11.2, -0.1], [4.2, 12.0, -0.3]]) out.push(T(z, x, (ctx, cam) => K.wedge(ctx, cam, x, z, r)));
+      return out;
+    },
+  },
   "voice-strings": {
     title: "Singer, string quartet + piano",
     items: () => [
@@ -511,10 +555,16 @@ export function makeSalmonScene(programId = "piano-solo") {
   return makeHallScene("salmon", programId);
 }
 
-export function makeHallScene(roomId, programId = "piano-solo") {
+// `view` (optional) puts the camera somewhere else and/or draws the hall wider
+// than the booth's usual 32 mm: { id, label, cam: { pos, pitchDeg,
+// equivFocal }, audience }. The lens-shopping station uses it to show what a
+// wide lens sees from the booth and from the center aisle.
+export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   const room = ROOMS[roomId];
   const program = PROGRAMS[programId] || PROGRAMS["piano-solo"];
-  const cam = K.makeCamera(CAM);
+  const camDef = view?.cam || CAM;
+  const cam = K.makeCamera(camDef);
+  const floorNear = Math.max(7, camDef.pos[2] + 2.5);
   const items = program.items().sort((a, b) => b.z - a.z);
   const people = items.filter((i) => i.person).map((i) => i.person);
   const dim = !!program.dim;
@@ -559,33 +609,37 @@ export function makeHallScene(roomId, programId = "piano-solo") {
     {
       id: "floor",
       name: "Stage floor",
-      depthRange: { far: cam.dist(0, 0, BACK_Z), near: cam.dist(0, 0, 7), vFar: cam.uv(0, 0, BACK_Z)[1], vNear: cam.uv(0, 0, 7)[1] },
+      depthRange: { far: cam.dist(0, 0, BACK_Z), near: cam.dist(0, 0, floorNear), vFar: cam.uv(0, 0, BACK_Z)[1], vNear: Math.min(1, cam.uv(0, 0, floorNear)[1]) },
       light: "stage",
       draw: (ctx, w, h) => room.floor(ctx, w, h, cam, { dim }),
     },
     ...stageLayers,
     ...(room.mics ? [{ id: "mics", name: "Hanging mic pair", depth: cam.dist(0, 3.6, 13.5), light: "walls", draw: (ctx, w, h) => drawMics(ctx, w, h, cam), noFocus: true }] : []),
     ...moverLayers(program, cam, people),
-    {
-      id: "audience",
-      name: "Audience",
-      depthRange: { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
-      light: "house",
-      draw: (ctx) => K.audience(ctx, cam, audienceRows, programId.length),
-    },
-  ].slice(0, 10);
+    view?.audience === false
+      ? null
+      : {
+          id: "audience",
+          name: "Audience",
+          depthRange: { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
+          light: "house",
+          draw: (ctx) => K.audience(ctx, cam, audienceRows, programId.length),
+        },
+  ]
+    .filter(Boolean)
+    .slice(0, 10);
 
   const aim = [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
   return {
-    id: `${roomId}-${programId}`,
-    title: `${room.title} — ${program.title}`,
+    id: view ? `${roomId}-${view.id}-${programId}` : `${roomId}-${programId}`,
+    title: view ? `${room.title} — ${program.title}, ${view.label}` : `${room.title} — ${program.title}`,
     room: roomId,
     program: programId,
     blurb: room.blurb,
     // Salmon: F4 · 3 dB · 1/60 on an AX100 is correct exposure (dim programs
     // are two stops darker — that's when you open up).
     ev100: room.ev100(dim),
-    equivFocal: CAM.equivFocal,
+    equivFocal: camDef.equivFocal,
     maxFrameZoom: 3.5,
     aim,
     framing: box,
@@ -609,3 +663,15 @@ export function makeHallScene(roomId, programId = "piano-solo") {
 }
 
 export const SALMON_PROGRAM_IDS = Object.keys(PROGRAMS);
+
+// Salmon drawn wider than any lens Chapman owns (15 mm equivalent), from two
+// places a camera could stand: the booth, where the static wide lives, and the
+// center aisle a few rows back, and down front at the edge of the stage —
+// the closer the camera, the wider the lens it needs. For the lens-shopping
+// station.
+export const WIDE_VIEWS = [
+  { id: "booth15", label: "from the booth", cam: { pos: [0, 5.0, 0], pitchDeg: 14, equivFocal: 15 } },
+  { id: "aisle15", label: "from the center aisle", cam: { pos: [0, 1.6, 5.0], pitchDeg: 3, equivFocal: 15 }, audience: false },
+  { id: "front15", label: "down front", cam: { pos: [0, 1.3, 7.0], pitchDeg: 2, equivFocal: 15 }, audience: false },
+];
+export const WIDE_PROGRAM_IDS = ["mariachi", "choir", "chamber-orchestra", "cme"];

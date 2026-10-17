@@ -194,3 +194,21 @@ test("Musco shading: a camera off by B PED −8 doesn't match; at house defaults
   const good = rig(s.scene, "ue150", { ...one.start, ...MUSCO_HOUSE }, one);
   assert.equal(checks.blacksMatch("3", { rig: "1" }).test(ctxFor({ 3: R, 1: good }, "1")).pass, true);
 });
+
+test("Lens Shopping: every 'longest lens that fits' step has an answer that really fits", async () => {
+  const { bestLens } = await import("../data/stations.js");
+  const s = stations.find((x) => x.id === "lens-shopping");
+  const scenes = [s.scene, ...s.steps.map((st) => st.enter?.scene).filter(Boolean)];
+  for (const id of scenes) {
+    const scene = getScene(id);
+    const best = bestLens(scene);
+    assert.ok(best, `${id}: no lens fits`);
+    // Same check as the framing station, from the browser's own view math.
+    const { min } = focalRange(scene, best);
+    const r = rig(scene, best.id, { ...s.start, focal: min });
+    assert.ok(checks.framing({ minFill: 0 }).test(ctxFor({ main: r }, "main")).pass, `${id}: ${best.id} at its widest doesn't frame everyone`);
+    assert.ok(s.cameras.includes(best.id));
+  }
+  // The point of the station: the answer changes as the camera moves closer.
+  assert.deepEqual(scenes.map((id) => bestLens(getScene(id)).id), ["gh5-14-140", "gh5-12-60", "gh5-9-18"]);
+});

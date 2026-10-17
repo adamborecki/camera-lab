@@ -28,6 +28,7 @@
 //             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
 import { effectiveWb } from "../js/sim/camera-model.js";
+import { getCamera } from "./cameras.js";
 
 // Floor sections, in display order. Rename the label text freely (e.g. to
 // match an actual Canvas assignment name each term) — station.group values
@@ -71,6 +72,40 @@ function MUSCO_RIGS(off = {}) {
     start: { ...MUSCO_START, focal: p.focal, ...(off[id] || {}) },
   }));
 }
+// Lens Shopping: is everyone (standing to bow) inside the frame, and which
+// GH5 lens is the longest that still gets them all in from here?
+const LENSES = ["gh5-14-140", "gh5-12-60", "gh5-9-18", "gh5-7-5"];
+function inFrame(scene, view) {
+  const b = scene.framing;
+  const half = 0.5 / view.zoom;
+  const pad = 0.01 / view.zoom;
+  return b.x0 >= view.x - half + pad && b.x1 <= view.x + half - pad && b.y0 >= view.y - half + pad && b.y1 <= view.y + half - pad;
+}
+const widestOf = (scene, camera) => Math.max(camera.lens.wide, scene.equivFocal);
+export function lensFits(scene, camera) {
+  const zoom = widestOf(scene, camera) / scene.equivFocal;
+  const half = 0.5 / zoom;
+  const clamp = (v) => Math.min(1 - half, Math.max(half, v));
+  return inFrame(scene, { x: clamp(scene.aim[0]), y: clamp(scene.aim[1]), zoom });
+}
+export function bestLens(scene) {
+  const fit = LENSES.map(getCamera).filter((c) => lensFits(scene, c));
+  return fit.reduce((a, c) => (!a || c.lens.wide > a.lens.wide ? c : a), null);
+}
+const atWidest = (c) => c.settings.focal <= widestOf(c.scene, c.camera) + 0.5;
+const mm = (c) => `${Math.round(c.settings.focal)} mm`;
+const lensName = (cam) => cam.name.replace(/^GH5 \+ /, "").replace(/ \(owned\)$/, "");
+const pickedBest = (c) => inFrame(c.scene, c.view) && c.camera.id === bestLens(c.scene)?.id;
+const pickNotYet = (c) => {
+  if (!inFrame(c.scene, c.view)) return "Someone's cut off. Zoom out (W), or try a wider lens from the Camera menu.";
+  const best = bestLens(c.scene);
+  if (best && c.camera.lens.wide < best.lens.wide) return "Everyone fits — but a lens that doesn't go quite as wide would fit them too, and make them bigger. Try another.";
+  return "Try another lens from the Camera menu.";
+};
+const alsoFit = (c, best) =>
+  LENSES.map(getCamera)
+    .filter((x) => x.id !== best.id && lensFits(c.scene, x))
+    .map(lensName);
 
 export const stations = [
   // ---------------- learn ----------------
@@ -710,7 +745,7 @@ export const stations = [
         text: "A sixteen-piece mariachi, wall to wall. Reframe.",
         when: (c) => checks.framing().test(c).pass,
         notYet: (c) => checks.framing().test(c).detail,
-        done: "Near the wide end. The AX100's widest is 29 mm (35mm-equivalent) — just enough here. The GH5's 14–140 only gets to 28 mm, which is why a wider lens is on the department's shopping list.",
+        done: "Wide, but with room to spare: from the booth even the biggest group fits well inside the AX100's widest (29 mm, 35mm-equivalent). Wide lenses matter when the camera has to stand closer — try Lens Shopping in Free play.",
       },
     ],
   },
@@ -1068,6 +1103,62 @@ export const stations = [
       on: ["meter", "hud"],
     },
     intro: "Everything unlocked. Break it on purpose, then fix it.",
+  },
+
+  {
+    id: "lens-shopping",
+    title: "Lens Shopping: How Wide Is Wide Enough?",
+    purpose: "Where the camera stands decides the lens it needs.",
+    group: "play",
+    accent: "#C9B8FF",
+    mode: "guided",
+    scene: "salmon-booth15-mariachi",
+    camera: "gh5-14-140",
+    cameraChoice: true,
+    cameras: LENSES,
+    start: { fps: 30, shutter: 60, aperture: 5.6, iso: 400, focal: 60, wb: 3200 },
+    controls: ["zoom"],
+    tools: { available: ["hud"], on: ["hud"] },
+    intro:
+      "The department's GH5s have one lens, the 14–140, and its widest is 28 mm (35mm-equivalent). Before buying something wider, find out where it would actually help: the same Salmon, three places to put the camera. Everyone has to fit <strong>standing up to bow</strong>.",
+    steps: [
+      {
+        text: "You're in the booth with the 14–140, and the mariachi is on — sixteen players across the stage. <strong>Zoom all the way out</strong> (W). Does everyone fit?",
+        when: atWidest,
+        notYet: "Zoom all the way out, then check.",
+        done: (c) =>
+          `Easily — at ${mm(c)} there's empty hall on both sides. From the booth the stage is a long way off, so a static wide back here zooms <em>in</em> to fill the frame. In the booth, the lens's wide end isn't the problem.`,
+      },
+      {
+        enter: { scene: "salmon-aisle15-choir", camera: "gh5-14-140" },
+        text: "Now the camera is on a tripod in the <strong>center aisle</strong>, about 5 m from the stage — a closer second angle, or a wide when the booth view is blocked. The choir is on, with the pianist. <strong>Zoom all the way out</strong> again.",
+        when: atWidest,
+        notYet: "Zoom all the way out, then check.",
+        done: (c) =>
+          inFrame(c.scene, c.view)
+            ? `Everyone fits at ${mm(c)}.`
+            : `Not quite: at ${mm(c)} someone is cut off — look at the pianist and the ends of the riser. Halfway to the stage, the same choir takes up a much wider angle.`,
+      },
+      {
+        text: "Open the <strong>Camera</strong> menu and try the other lenses. Pick the <strong>longest</strong> one that still gets everyone in — any wider just makes the performers smaller.",
+        when: pickedBest,
+        notYet: pickNotYet,
+        hint: "Zoom each lens all the way out. The one you want fits, but only just.",
+        done: (c) => {
+          const others = alsoFit(c, c.camera);
+          return `The ${lensName(c.camera)}: its widest (${c.camera.lens.wide} mm) gets the choir in from the aisle.${others.length ? ` The ${others.join(" and the ")} would too, with more empty hall around everyone.` : ""}`;
+        },
+      },
+      {
+        enter: { scene: "salmon-front15-mariachi", camera: "gh5-14-140" },
+        text: "Last spot: <strong>down front</strong>, at the edge of the stage — as close as a camera gets. The mariachi again. Find the <strong>longest lens that fits</strong> now.",
+        when: pickedBest,
+        notYet: pickNotYet,
+        hint: "Up close you need a lot more width. Start from the widest and work back.",
+        done: (c) =>
+          `The ${lensName(c.camera)} at ${c.camera.lens.wide} mm. The closer the camera, the wider the lens — that's the whole trade. (This Salmon is drawn from photos, not measured, so treat the exact millimeters as approximate.)`,
+      },
+    ],
   },
 
   // ---------------- finish ----------------
