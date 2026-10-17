@@ -27,7 +27,7 @@
 //             step began (see exposure-triangle below), for steps that care
 //             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
-import { effectiveWb } from "../js/sim/camera-model.js";
+import { effectiveWb, frameCenter } from "../js/sim/camera-model.js";
 import { getCamera } from "./cameras.js";
 
 // Floor sections, in display order. Rename the label text freely (e.g. to
@@ -60,9 +60,7 @@ function inFrame(scene, view) {
 const widestOf = (scene, camera) => Math.max(camera.lens.wide, scene.equivFocal);
 export function lensFits(scene, camera) {
   const zoom = widestOf(scene, camera) / scene.equivFocal;
-  const half = 0.5 / zoom;
-  const clamp = (v) => Math.min(1 - half, Math.max(half, v));
-  return inFrame(scene, { x: clamp(scene.aim[0]), y: clamp(scene.aim[1]), zoom });
+  return inFrame(scene, { ...frameCenter(scene.aim, zoom, scene.maxFrameZoom), zoom });
 }
 export function bestLens(scene) {
   const fit = LENSES.map(getCamera).filter((c) => lensFits(scene, c));
@@ -927,14 +925,14 @@ export const stations = [
           `Easily — at ${mm(c)} there's empty hall on both sides. From the booth the stage is a long way off, so a static wide back here zooms <em>in</em> to fill the frame. In the booth, the lens's wide end isn't the problem.`,
       },
       {
-        enter: { scene: "salmon-aisle15-choir", camera: "gh5-14-140" },
-        text: "Now the camera is on a tripod in the <strong>center aisle</strong>, about 5 m from the stage — a closer second angle, or a wide when the booth view is blocked. The choir is on, with the pianist. <strong>Zoom all the way out</strong> again.",
+        enter: { scene: "salmon-aisle15-chamber-orchestra", camera: "gh5-14-140" },
+        text: "Now the camera is on a tripod in the <strong>center aisle</strong>, about 5 m from the stage — a closer second angle, or a wide when the booth view is blocked. The chamber orchestra is on, conductor and all. <strong>Zoom all the way out</strong> again.",
         when: atWidest,
         notYet: "Zoom all the way out, then check.",
         done: (c) =>
           inFrame(c.scene, c.view)
             ? `Everyone fits at ${mm(c)}.`
-            : `Not quite: at ${mm(c)} someone is cut off — look at the pianist and the ends of the riser. Halfway to the stage, the same choir takes up a much wider angle.`,
+            : `Not quite: at ${mm(c)} someone is cut off — look at the ends of the orchestra. Halfway to the stage, the same group takes up a much wider angle.`,
       },
       {
         text: "Open the <strong>Camera</strong> menu and try the other lenses. Pick the <strong>longest</strong> one that still gets everyone in — any wider just makes the performers smaller.",
@@ -943,7 +941,7 @@ export const stations = [
         hint: "Zoom each lens all the way out. The one you want fits, but only just.",
         done: (c) => {
           const others = alsoFit(c, c.camera);
-          return `The ${lensName(c.camera)}: its widest (${c.camera.lens.wide} mm) gets the choir in from the aisle.${others.length ? ` The ${others.join(" and the ")} would too, with more empty hall around everyone.` : ""}`;
+          return `The ${lensName(c.camera)}: its widest (${c.camera.lens.wide} mm) gets the whole orchestra in from the aisle.${others.length ? ` The ${others.join(" and the ")} would too, with more empty hall around everyone.` : ""}`;
         },
       },
       {

@@ -65,7 +65,7 @@ Micro Four Thirds: equivalent = 2 × focal length. Prices are rough (Oct 2026); 
 
 The **Lens Shopping** station (Free play) puts the 12–60, 9–18 and Laowa 7.5 on the GH5 in Salmon. In
 the sim's (estimated) Salmon, the booth needs nothing wider than the 14–140; a camera in the center aisle
-~5 m from the stage needs ~24 mm for the choir; down front at the stage edge needs ~18 mm for the
+~5 m from the stage needs ~24 mm for the chamber orchestra; down front at the stage edge needs ~18 mm for the
 mariachi. So: wider only pays off if the GH5 is going to stand close — which is a question about where
 it goes, not about lenses.
 

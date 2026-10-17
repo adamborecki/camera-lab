@@ -126,6 +126,25 @@ export const FOCUS_RANGE = { min: 0.4, max: 100 };
 // that's where the zoom range stops, tighter than a 5.6× crop would really go.
 export const MAX_FRAME_ZOOM = 3;
 
+// Where the frame sits in the drawn scene at a zoom (≥ 1). The drawn scene
+// is the whole room, level and centered; `aim` (scene uv) is the subject.
+// Zooming is a pure scale about one fixed point, so everything moves in a
+// straight line out from it — no "pan first, then zoom" — and the point is
+// chosen so the subject arrives in the middle of the frame at the longest
+// zoom the scene allows (`maxZoom`). At 1× it's the whole scene, and the
+// frame never leaves the drawn image.
+export function frameCenter(aim, zoom, maxZoom = MAX_FRAME_ZOOM) {
+  const z = Math.max(1, zoom);
+  const k = maxZoom > 1 ? maxZoom / (maxZoom - 1) : 1;
+  const half = 0.5 / z;
+  const at = (p) => {
+    const q = Math.min(1, Math.max(0, 0.5 + (p - 0.5) * k)); // the fixed point
+    return Math.min(1 - half, Math.max(half, q - (q - 0.5) / z));
+  };
+  const [ax, ay] = aim || [0.5, 0.5];
+  return { x: at(ax), y: at(ay) };
+}
+
 export function focalRange(scene, camera) {
   const maxZoom = scene.maxFrameZoom || MAX_FRAME_ZOOM;
   let min = scene.equivFocal;

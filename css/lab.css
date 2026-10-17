@@ -691,7 +691,11 @@ main:has(.stage-lab:not([hidden])) {
   font-size: 0.9rem;
 }
 .body-panel-title span { font-weight: 500; letter-spacing: 0; color: var(--text-dim); }
-.ax-buttons, .ax-row, .ax-menu-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.ax-row, .ax-menu-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+/* a fixed grid, so nothing moves when an "A" comes or goes: IRIS · GAIN ·
+   SHUTTER on top, WB · MANUAL below */
+.ax-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
+.ax-buttons .hw-btn { padding-left: 0.4rem; padding-right: 0.4rem; }
 .hw-btn {
   font: 600 0.78rem/1 "Barlow Condensed", "Arial Narrow", sans-serif;
   letter-spacing: 0.06em;
@@ -707,7 +711,8 @@ main:has(.stage-lab:not([hidden])) {
 }
 .hw-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #0d0d10; }
 .hw-btn.on { border-color: #ff9a3c; color: #ffb36b; }
-.hw-btn.auto::after { content: " A"; color: #8fd0ff; }
+.hw-btn[data-item]::after { content: " A"; color: #8fd0ff; visibility: hidden; }
+.hw-btn.auto::after { visibility: visible; }
 .hw-manual { color: #ffd166; }
 .hw-switch {
   display: inline-flex;
@@ -765,6 +770,49 @@ main:has(.stage-lab:not([hidden])) {
   display: grid;
   gap: 0.35rem;
 }
+/* WB shift: a square, a dot */
+.ax-pad { display: flex; justify-content: center; }
+.wb-pad { display: grid; gap: 0.4rem; width: min(100%, 15rem); }
+.wb-pad-head { display: flex; align-items: center; gap: 0.5rem; font: 600 0.8rem "Barlow Condensed", sans-serif; letter-spacing: 0.06em; color: var(--text-dim); }
+.wb-pad-head strong { color: #ffb36b; font-size: 1rem; letter-spacing: 0.04em; flex: 1; }
+.wb-pad-head .hw-btn { min-height: 2rem; padding: 0.3rem 0.7rem; }
+.wb-pad-frame { position: relative; padding: 1.3rem; }
+.wb-pad-axis { position: absolute; font: 700 0.85rem "Barlow Condensed", sans-serif; }
+.wb-g { top: 0; left: 50%; transform: translateX(-50%); color: #7fdc8a; }
+.wb-m { bottom: 0; left: 50%; transform: translateX(-50%); color: #e07ad8; }
+.wb-b { left: 0.2rem; top: 50%; transform: translateY(-50%); color: #7fb0ff; }
+.wb-a { right: 0.2rem; top: 50%; transform: translateY(-50%); color: #ffb36b; }
+.wb-pad-grid {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  border: 1px solid #4a4b54;
+  /* tinted toward each corner, with a cell grid on top */
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / calc(100% / var(--cells)) 100%,
+    linear-gradient(0deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 100% calc(100% / var(--cells)),
+    linear-gradient(90deg, rgba(90, 140, 255, 0.35), transparent 45%, transparent 55%, rgba(255, 160, 60, 0.35)),
+    linear-gradient(180deg, rgba(90, 220, 110, 0.35), transparent 45%, transparent 55%, rgba(230, 100, 220, 0.35)),
+    #15161a;
+  touch-action: none;
+  cursor: crosshair;
+}
+.wb-pad-grid::before, .wb-pad-grid::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.28); }
+.wb-pad-grid::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.wb-pad-grid::after { top: 50%; left: 0; right: 0; height: 1px; }
+.wb-pad-grid:focus-visible { outline: 2px solid #ff9a3c; outline-offset: 2px; }
+.wb-pad-dot {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: #ff9a3c;
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 1;
+}
 .ax-menu-title { margin: 0; font: 600 0.75rem "Barlow Condensed", sans-serif; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
 
 /* the AX100's touchscreen, drawn over the picture */
@@ -801,6 +849,7 @@ main:has(.stage-lab:not([hidden])) {
   cursor: pointer;
   min-height: 1.9em;
 }
+.ax-manual { color: #ffd166; letter-spacing: 0.05em; }
 .ax-item small { font-size: 0.62em; opacity: 0.75; letter-spacing: 0.05em; }
 .ax-item.sel { border-color: #ff9a3c; background: rgba(255, 154, 60, 0.28); }
 .ax-a { color: #8fd0ff; font-size: 0.8em; border: 1px solid #8fd0ff; border-radius: 2px; padding: 0 0.15em; line-height: 1; }
@@ -867,3 +916,7 @@ main:has(.stage-lab:not([hidden])) {
 @media (max-width: 560px) {
   .monitor-tile.active { order: -1; }
 }
+
+/* which room the picture is in */
+.scene-tag { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+.scene-tag[hidden] { display: none; }

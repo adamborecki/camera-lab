@@ -12,19 +12,22 @@
 //    while the camera's own meter happily reads 0). Pressing it again locks
 //    all three at whatever auto had picked.
 //  • White balance lives behind the WB button: Auto, Outdoor, Indoor, One
-//    Push, or Color Temp — plus the A–B / G–M shift used to match Salmon's
-//    RovoCams (3800K, A5 G2).
+//    Push, or Color Temp — plus the WB shift, a square you move a dot on
+//    (A–B across, G–M up and down), used to match Salmon's RovoCams
+//    (3800K, A5 G2).
 //
 // Unverified against the body (README → Technical verification): button
 // names and positions, the MANUAL button behavior as described by the
 // instructor, the WB shift ranges, and the exact LCD layout.
 import { Dial } from "./dial.js";
+import { WbPad, shiftWord } from "./wb-pad.js";
 import { apertureOptions, shutterOptions, gainOptions, maxApertureAt, exactAperture, WB_RANGE, formatDistance } from "../sim/camera-model.js";
 
+// In the order they sit on the body and the screen: iris, gain, shutter.
 const EXPOSURE_ITEMS = [
   { id: "aperture", label: "IRIS", button: "IRIS" },
-  { id: "shutter", label: "SHUTTER", button: "SHUTTER SPEED" },
   { id: "gainStops", label: "GAIN", button: "GAIN/ISO" },
+  { id: "shutter", label: "SHUTTER", button: "SHUTTER SPEED" },
 ];
 const WB_MODES = [
   { id: "auto", label: "Auto" },
@@ -84,7 +87,6 @@ export class Ax100Panel {
       else if (t.dataset.nd != null) this.host.change("nd", Number(t.dataset.nd));
       else if ("af" in t.dataset) this.toggleAf();
       else if (t.dataset.wbmode) this.pickWb(t.dataset.wbmode);
-      else if (t.dataset.wbsel) this.select(t.dataset.wbsel);
     });
     this.lcd.addEventListener("click", (e) => {
       const t = e.target.closest("button");
@@ -93,6 +95,7 @@ export class Ax100Panel {
       if (t.dataset.item) this.press(t.dataset.item);
       else if ("wb" in t.dataset) this.toggleWbMenu();
       else if ("af" in t.dataset) this.toggleAf();
+      else if ("manual" in t.dataset) this.manualButton();
     });
     // hold the zoom lever
     this.el.querySelectorAll("[data-zoom]").forEach((b) => {
@@ -140,8 +143,8 @@ export class Ax100Panel {
     this.select(null);
     this.host.say(
       anyManual
-        ? "MANUAL: iris, shutter and gain all went back to automatic. Watch the stage — and the camera's meter."
-        : "MANUAL: iris, shutter and gain are locked at what auto picked. Tap one to adjust it.",
+        ? "MANUAL: iris, gain and shutter all went back to automatic. Watch the stage — and the camera's meter."
+        : "MANUAL: iris, gain and shutter are locked at what auto picked. Tap one to adjust it.",
     );
     this.host.note("manual-button");
   }
@@ -190,7 +193,7 @@ export class Ax100Panel {
     const cam = this.host.camera;
     const id = this.selected;
     if (!id) {
-      this.ringWrap.innerHTML = `<p class="ax-ring-idle">MANUAL ring — nothing selected. Tap IRIS, SHUTTER or GAIN on the screen.</p>`;
+      this.ringWrap.innerHTML = `<p class="ax-ring-idle">MANUAL ring — nothing selected. Tap IRIS, GAIN or SHUTTER on the screen.</p>`;
       return;
     }
     let opts = null;
@@ -219,14 +222,6 @@ export class Ax100Panel {
         ticks: [2300, 3200, 4000, 5000, 5600, 6500, 8000].map((v) => ({ value: v, label: `${v}K`, major: true })),
       };
       label = "MANUAL ring · COLOR TEMP";
-    } else if (id === "wbAB" || id === "wbGM") {
-      const max = cam.wbShift?.[id === "wbAB" ? "ab" : "gm"] || 7;
-      opts = [];
-      for (let v = -max; v <= max; v++) {
-        const word = id === "wbAB" ? (v > 0 ? `A${v}` : v < 0 ? `B${-v}` : "A-B 0") : v > 0 ? `G${v}` : v < 0 ? `M${-v}` : "G-M 0";
-        opts.push({ value: v, label: word, major: v % 2 === 0 });
-      }
-      label = id === "wbAB" ? "MANUAL ring · WB SHIFT A–B" : "MANUAL ring · WB SHIFT G–M";
     }
     const key = id;
     this.ring = new Dial({
@@ -242,18 +237,30 @@ export class Ax100Panel {
 
   renderWbMenu() {
     this.wbMenuEl.hidden = !this.wbMenu;
-    if (!this.wbMenu) return;
+    if (!this.wbMenu) {
+      this.pad = null;
+      return;
+    }
     const s = this.host.get();
     const mode = s.wbMode || "temp";
     this.wbMenuEl.innerHTML = `
       <p class="ax-menu-title">White Balance</p>
       <div class="ax-menu-row">${WB_MODES.map((m) => `<button type="button" class="hw-btn${m.id === mode ? " on" : ""}" data-wbmode="${m.id}">${m.label}</button>`).join("")}</div>
-      <p class="ax-menu-title">WB shift (fine trim)</p>
-      <div class="ax-menu-row">
-        <button type="button" class="hw-btn${this.selected === "wbAB" ? " on" : ""}" data-wbsel="wbAB">A–B ${shiftWord(s.wbAB, "A", "B")}</button>
-        <button type="button" class="hw-btn${this.selected === "wbGM" ? " on" : ""}" data-wbsel="wbGM">G–M ${shiftWord(s.wbGM, "G", "M")}</button>
-        <button type="button" class="hw-btn" data-wb>Done</button>
-      </div>`;
+      <p class="ax-menu-title">WB shift (fine trim) — move the dot</p>
+      <div class="ax-pad"></div>
+      <div class="ax-menu-row"><button type="button" class="hw-btn" data-wb>Done</button></div>`;
+    const max = this.host.camera.wbShift || { ab: 7, gm: 7 };
+    this.pad = new WbPad({
+      ab: max.ab,
+      gm: max.gm,
+      value: { ab: s.wbAB, gm: s.wbGM },
+      onChange: (ab, gm) => {
+        const now = this.host.get();
+        if (ab !== now.wbAB) this.host.change("wbAB", ab);
+        if (gm !== now.wbGM) this.host.change("wbGM", gm);
+      },
+    });
+    this.wbMenuEl.querySelector(".ax-pad").appendChild(this.pad.el);
   }
 
   // Redraw the LCD and button states from the current settings.
@@ -272,9 +279,10 @@ export class Ax100Panel {
       <div class="ax-top"><span class="${extra.recording ? "ax-rec" : "ax-stby"}">${extra.recording ? "● REC" : "STBY"}</span><span>${extra.time || "0:00:00"}</span><span class="ax-batt">AC ⏻</span></div>
       <div class="ax-left">${nd}<button type="button" class="ax-item${sel("wb")}" data-wb>${wbText}${shift}</button><button type="button" class="ax-item" data-af>${s.auto?.focus ? "AF" : `MF ${formatDistance(s.focus)}`}</button></div>
       <div class="ax-bottom">
+        <button type="button" class="ax-item ax-manual" data-manual>MANUAL</button>
         <button type="button" class="ax-item${sel("aperture")}" data-item="aperture"><small>IRIS</small>F${s.aperture.toFixed(1)}${a("aperture")}</button>
-        <button type="button" class="ax-item${sel("shutter")}" data-item="shutter"><small>SHUTTER</small>${s.shutter}${a("shutter")}</button>
         <button type="button" class="ax-item${sel("gainStops")}" data-item="gainStops"><small>GAIN</small>${gain.shown}dB${a("gainStops")}</button>
+        <button type="button" class="ax-item${sel("shutter")}" data-item="shutter"><small>SHUTTER</small>${s.shutter}${a("shutter")}</button>
       </div>`;
     if (html !== this.lastLcd) {
       this.lcd.innerHTML = html;
@@ -291,11 +299,13 @@ export class Ax100Panel {
       if (v !== this.ring.value) this.ring.setValue(v, true);
     }
     if (this.wbMenu) {
-      const key = `${s.wbMode}|${s.wbAB}|${s.wbGM}|${this.selected}`;
+      // Rebuild for a mode change; just move the dot for a shift change, so a
+      // drag in progress isn't interrupted.
+      const key = `${s.wbMode}|${this.selected}`;
       if (key !== this.wbKey) {
         this.wbKey = key;
         this.renderWbMenu();
-      }
+      } else if (this.pad && !this.pad.dragging && (s.wbAB !== this.pad.ab || s.wbGM !== this.pad.gm)) this.pad.setValue(s.wbAB, s.wbGM);
     }
   }
 
@@ -310,7 +320,4 @@ export class Ax100Panel {
   }
 }
 
-export function shiftWord(v, pos, neg) {
-  if (!v) return "";
-  return v > 0 ? `${pos}${v}` : `${neg}${-v}`;
-}
+export { shiftWord };

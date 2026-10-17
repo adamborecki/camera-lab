@@ -74,7 +74,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 
 ### Camera bodies with their real controls
 
-`bodyControls: true` on a station swaps the generic dials for a replica of the body when it's an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen (tap to select, tap again to hand back to auto), the side buttons, the MANUAL ring, the MANUAL button (all three to auto — the trap), WB menu with Color Temp and A–B / G–M shift, ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
+`bodyControls: true` on a station swaps the generic dials for a replica of the body when it's an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen in the body's order — IRIS · GAIN · SHUTTER — (tap to select, tap again to hand back to auto), the side buttons in the same order, the MANUAL ring, the MANUAL button on the body and on the screen (all three to auto — the trap), WB menu with Color Temp and the WB shift as a square you drag a dot across (`js/ui/wb-pad.js`: A–B across, G–M up and down), ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
 
 ## Adding things
 
@@ -100,7 +100,7 @@ Spec-sheet values where they exist; teaching values otherwise. Relationships (st
 
 Not yet checked on the real gear — confirm before treating as instructions:
 
-- AX100: button names and positions; that the **MANUAL** button sends iris, shutter and gain to auto together (instructor's description; Sony's guide describes a PROGRAM AE button for that); double-press-to-auto on the touchscreen; gain range and step (sim: 0–33 dB in 3 dB steps); WB shift ranges (sim: ±7) and step size (sim: 5 mireds per A–B step, 1.5% green per G–M step).
+- AX100: button names and positions; that the **MANUAL** button sends iris, shutter and gain to auto together (instructor's description; Sony's guide describes a PROGRAM AE button for that); double-press-to-auto on the touchscreen; gain range and step (sim: 0–33 dB in 3 dB steps); WB shift ranges (sim: ±7) and step size (sim: 5 mireds per A–B step, 1.5% green per G–M step); the shift square's orientation (sim: G up, M down, B left, A right — Sony's usual layout); where MANUAL appears on the touchscreen (sim: bottom row, left of IRIS).
 - GH5 WB adjust range (sim: ±9) and how it's written on the body.
 - G50: whether the ND can be set manually.
 - RovoCam: its exposure settings in Salmon (sim: F4 · 3 dB · 1/60 — unknown) and the iris range at tele.

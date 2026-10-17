@@ -2,7 +2,7 @@
 // one camera or several, without a browser.
 import { getCamera } from "../data/cameras.js";
 import { getScene } from "../js/scenes/index.js";
-import { derive, normalizeSettings, settingsFromPreset } from "../js/sim/camera-model.js";
+import { derive, normalizeSettings, settingsFromPreset, frameCenter, MAX_FRAME_ZOOM } from "../js/sim/camera-model.js";
 
 export function rig(sceneOrId, cameraId, preset = {}, def = {}) {
   const scene = typeof sceneOrId === "string" ? getScene(sceneOrId) : sceneOrId;
@@ -12,13 +12,10 @@ export function rig(sceneOrId, cameraId, preset = {}, def = {}) {
   return { scene, camera, settings, derived, def, view: frameView(scene, derived, def), recording: !!def.recording };
 }
 
-// Same as lab-view's frameView: aimed at the subject, clamped inside the scene.
+// Same as lab-view's frameView: a straight zoom on the subject.
 export function frameView(scene, derived, def = {}) {
-  const frame = derived.frameZoom;
-  const half = 0.5 / frame;
-  const [ax, ay] = def.aim || scene.aim || [0.5, 0.5];
-  const clamp = (v) => Math.min(1 - half, Math.max(half, v));
-  return { x: clamp(ax), y: clamp(ay), zoom: frame };
+  const c = frameCenter(def.aim || scene.aim, derived.frameZoom, scene.maxFrameZoom || MAX_FRAME_ZOOM);
+  return { x: c.x, y: c.y, zoom: derived.frameZoom };
 }
 
 // ctx for a station: rigs = { id: rig(...) }, active = id of the one being driven.
