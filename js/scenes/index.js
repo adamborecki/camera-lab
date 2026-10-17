@@ -12,8 +12,9 @@ const auditorium = ["piano-solo", "voice-strings", "choir", "chamber-orchestra"]
 
 const musco = [makeMuscoScene("concert"), makeMuscoScene("preshow")];
 
-// Salmon drawn at 15 mm from the booth and the aisle, for lens shopping.
-const wide = WIDE_VIEWS.flatMap((v) => WIDE_PROGRAM_IDS.map((id) => makeHallScene("salmon", id, v)));
+// Salmon drawn at 15 mm from the booth, the aisle and down front, for Lens Shopping.
+// Hidden from scene menus that aren't asking for them by name.
+const wide = WIDE_VIEWS.flatMap((v) => WIDE_PROGRAM_IDS.map((id) => ({ ...makeHallScene("salmon", id, v), hidden: true })));
 
 export const scenes = [stageScene, parkScene, ...salmon, ...auditorium, ...musco, ...wide];
 

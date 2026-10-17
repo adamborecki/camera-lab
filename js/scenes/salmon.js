@@ -562,12 +562,14 @@ export function makeSalmonScene(programId = "piano-solo") {
 // `view` (optional) puts the camera somewhere else and/or draws the hall wider
 // than the booth's usual 32 mm: { id, label, cam: { pos, pitchDeg,
 // equivFocal }, audience }. The lens-shopping station uses it to show what a
-// wide lens sees from the booth and from the center aisle.
+// wide lens sees from the booth, the center aisle and down front.
 export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   const room = ROOMS[roomId];
   const program = PROGRAMS[programId] || PROGRAMS["piano-solo"];
   const camDef = view?.cam || CAM;
-  const floorNear = Math.max(7, camDef.pos[2] + 2.5);
+  // The nearest floor the depth ramp covers: z = 7 from the booth; just in
+  // front of the camera when it stands in the room.
+  const floorNear = view ? Math.max(6.2, camDef.pos[2] + 0.6) : 7;
   const items = program.items().sort((a, b) => b.z - a.z);
   const people = items.filter((i) => i.person).map((i) => i.person);
   const dim = !!program.dim;
@@ -625,7 +627,7 @@ export function makeHallScene(roomId, programId = "piano-solo", view = null) {
       : {
           id: "audience",
           name: "Audience",
-          depthRange: { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
+          depthRange: view ? { far: cam.dist(0, 2.75, 4.6), near: cam.dist(0, 3.15, 3.9), vFar: cam.uv(0, 2.75, 4.6)[1], vNear: 1.0 } : { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
           light: "house",
           draw: (ctx) => K.audience(ctx, cam, audienceRows, programId.length),
         },
@@ -668,8 +670,8 @@ export function makeHallScene(roomId, programId = "piano-solo", view = null) {
 
 export const SALMON_PROGRAM_IDS = Object.keys(PROGRAMS);
 
-// Salmon drawn wider than any lens Chapman owns (15 mm equivalent), from two
-// places a camera could stand: the booth, where the static wide lives, and the
+// Salmon drawn wider than any lens Chapman owns (15 mm equivalent), from three
+// places a camera could stand: the booth, where the static wide lives, the
 // center aisle a few rows back, and down front at the edge of the stage —
 // the closer the camera, the wider the lens it needs. For the lens-shopping
 // station.

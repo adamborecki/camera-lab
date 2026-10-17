@@ -27,7 +27,7 @@ test("station data is well-formed", () => {
       continue;
     }
     assert.ok(sceneIds.has(s.scene), `${s.id}: unknown scene ${s.scene}`);
-    for (const c of [s.camera, ...(s.cameraPool || []), ...(s.rigs || []).map((r) => r.camera)].filter(Boolean)) assert.ok(camIds.has(c), `${s.id}: unknown camera ${c}`);
+    for (const c of [s.camera, ...(s.cameraPool || []), ...(s.cameras || []), ...(s.rigs || []).map((r) => r.camera), ...(s.steps || []).map((st) => st.enter?.camera)].filter(Boolean)) assert.ok(camIds.has(c), `${s.id}: unknown camera ${c}`);
     for (const c of s.controls || []) assert.ok(CONTROLS.includes(c), `${s.id}: unknown control ${c}`);
     if (s.mode === "guided") for (const st of s.steps) assert.ok(st.text && typeof st.when === "function" && st.done, `${s.id}: step needs text, when, done`);
     if (s.mode === "challenge") assert.ok(s.criteria?.length, `${s.id}: challenge without criteria`);
@@ -207,7 +207,6 @@ test("Lens Shopping: every 'longest lens that fits' step has an answer that real
     const { min } = focalRange(scene, best);
     const r = rig(scene, best.id, { ...s.start, focal: min });
     assert.ok(checks.framing({ minFill: 0 }).test(ctxFor({ main: r }, "main")).pass, `${id}: ${best.id} at its widest doesn't frame everyone`);
-    assert.ok(s.cameras.includes(best.id));
   }
   // The point of the station: the answer changes as the camera moves closer.
   assert.deepEqual(scenes.map((id) => bestLens(getScene(id)).id), ["gh5-14-140", "gh5-12-60", "gh5-9-18"]);

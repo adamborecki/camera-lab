@@ -305,7 +305,7 @@ export class Ax100Panel {
       if (key !== this.wbKey) {
         this.wbKey = key;
         this.renderWbMenu();
-      } else if (this.pad && !this.pad.dragging && (s.wbAB !== this.pad.ab || s.wbGM !== this.pad.gm)) this.pad.setValue(s.wbAB, s.wbGM);
+      } else if (this.pad && !this.pad.dragging && !this.pad.busy && (s.wbAB !== this.pad.ab || s.wbGM !== this.pad.gm)) this.pad.setValue(s.wbAB, s.wbGM);
     }
   }
 

@@ -554,7 +554,7 @@ export function mountLab(container, station) {
       pickersEl.appendChild(picker("Camera", allowedCams, camera.id, (id) => setCamera(id)));
     }
     if (station.sceneChoice) {
-      const list = station.scenes ? scenes.filter((s) => station.scenes.some((p) => s.id.startsWith(p))) : scenes;
+      const list = station.scenes ? scenes.filter((s) => station.scenes.some((p) => s.id.startsWith(p))) : scenes.filter((s) => !s.hidden);
       pickersEl.appendChild(picker("Scene", list, scene.id, (id) => setScene(id)));
     }
     const reset = document.createElement("button");

@@ -152,10 +152,35 @@ for (const [w, h, tag] of [
   await page.close();
 }
 
+// ---- AX100 WB shift square: tap the A5 G2 cell, read it back ----
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.on("pageerror", (e) => failures.push(`wb pad pageerror: ${e.message}`));
+  await open(page, "match-rovocam");
+  await page.click(".ax-buttons [data-wb]");
+  await page.click('[data-wbmode="temp"]');
+  const grid = page.locator(".wb-pad-grid");
+  await grid.scrollIntoViewIfNeeded();
+  const g = await grid.boundingBox();
+  // 15 × 15 cells for ±7: A5 is column 12 of 15, G2 is row 5 of 15 (from the top)
+  await grid.click({ position: { x: g.width * (12.5 / 15), y: g.height * (5.5 / 15) } });
+  await page.waitForTimeout(150);
+  const val = await page.locator(".wb-pad-value").innerText();
+  const lcd = await page.locator(".ax-lcd [data-wb]").innerText();
+  if (val !== "A5 G2" || !lcd.includes("A5 G2")) failures.push(`WB pad: tapped A5 G2, got "${val}" (screen "${lcd}")`);
+  const dot = await page.locator(".wb-pad-dot").boundingBox();
+  const cx = dot.x + dot.width / 2 - g.x;
+  if (Math.abs(cx / g.width - 12.5 / 15) > 0.02) failures.push(`WB pad: dot not centered in its cell (${(cx / g.width).toFixed(3)})`);
+  await page.click(".wb-pad-zero");
+  if ((await page.locator(".wb-pad-value").innerText()) !== "0 (no shift)") failures.push("WB pad: 0 didn't clear the shift");
+  await page.close();
+}
+
 // ---- Lens Shopping (phone size: the lens menu has to work there) ----
 {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on("pageerror", (e) => failures.push(`lens-shopping pageerror: ${e.message}`));
+  page.on("console", (m) => m.type() === "error" && failures.push(`lens-shopping console: ${m.text()}`));
   await open(page, "lens-shopping");
   const widest = () => page.evaluate(() => cameraLab.set("focal", 1));
   const lens = async (id) => {
@@ -185,4 +210,4 @@ if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100, RP150, livestream and lens-shopping walkthroughs`);
+console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100, WB pad, RP150, livestream and lens-shopping walkthroughs`);
