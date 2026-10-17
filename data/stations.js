@@ -50,16 +50,18 @@ const sharp = (c, key) => {
 };
 
 // Musco's PTZ cameras, all UE150s on one RP150. Positions are faked with an
-// aim, a zoom and a sideways shift. Numbering is a placeholder until the
-// instructor confirms Musco's camera map — the checklist confirms only that
-// camera 3 is the static wide.
+// aim, a zoom and a sideways shift. Numbering follows the multiview as the
+// instructor gave it (Oct 17): 2 static wide, 5 conductor cam, 7 backstage,
+// 8 PowerPoint/video, and 1, 3, 4, 6 the close-ups (two per operator). The
+// conductor cam faces the other way and isn't simulated. Open question
+// (README): the gig checklist says camera 3 is the static wide.
 const MUSCO_START = { fps: 30, aperture: 5.6, gainDb: 0, shutter: 60, wb: 3200, wbMode: "indoor", focus: 22 };
 const MUSCO_POS = {
   1: { label: "Camera 1 · flutes, house left", aim: [0.25, 0.68], focal: 120, angle: { shift: -1.4, aimDepth: 20 } },
-  2: { label: "Camera 2 · wide, balcony", aim: [0.5, 0.6], focal: 44, angle: { shift: 0.2, aimDepth: 22 } },
-  3: { label: "Camera 3 · static wide", aim: [0.5, 0.6], focal: 52, readOnly: true },
+  2: { label: "Camera 2 · static wide", aim: [0.5, 0.6], focal: 52, readOnly: true },
+  3: { label: "Camera 3 · center, over the conductor", aim: [0.5, 0.6], focal: 70, angle: { shift: 0.2, aimDepth: 22 } },
   4: { label: "Camera 4 · brass, house left", aim: [0.34, 0.58], focal: 110, angle: { shift: -1.8, aimDepth: 24 } },
-  5: { label: "Camera 5 · horns & percussion, house right", aim: [0.7, 0.6], focal: 100, angle: { shift: 1.6, aimDepth: 23 } },
+  6: { label: "Camera 6 · horns & percussion, house right", aim: [0.7, 0.6], focal: 100, angle: { shift: 1.6, aimDepth: 23 } },
 };
 function MUSCO_RIGS(off = {}) {
   return Object.entries(MUSCO_POS).map(([id, p]) => ({
@@ -908,8 +910,8 @@ export const stations = [
   // ---------------- homework 4: Musco ----------------
   // One controller, many cameras: read the multiview, pick a camera on the
   // RP150, read its screen, and shade every PTZ to match the static wide
-  // under the brightest cue. Camera numbers and positions are placeholders
-  // until the instructor confirms Musco's camera map (README).
+  // under the brightest cue. Camera numbers follow the instructor's multiview
+  // map; positions on stage are illustrative (README).
   {
     id: "warmup-salmon-numbers",
     title: "Warm-up: The Salmon Numbers",
@@ -953,7 +955,7 @@ export const stations = [
   },
   {
     id: "musco-multiview",
-    title: "Musco: One Controller, Five Cameras",
+    title: "Musco: One Multiview, Many Cameras",
     purpose: "The multiview, the RP150's camera buttons, and the static wide you never touch.",
     group: "hw4",
     accent: "#B88CFF",
@@ -962,19 +964,20 @@ export const stations = [
     bodyControls: true,
     rigs: MUSCO_RIGS(),
     tools: { available: ["hud"], on: [] },
-    intro: "Musco's cameras are remote-controlled PTZs. One Panasonic RP150 controller runs all of them: whichever camera button is lit is the camera the knobs change.",
+    intro:
+      "Musco's cameras are remote-controlled PTZs. One Panasonic RP150 controller runs all of them: whichever camera button is lit is the camera the knobs change. On the multiview: <strong>2</strong> is the static wide, <strong>5</strong> the conductor cam, <strong>7</strong> a backstage view nobody uses, <strong>8</strong> PowerPoint or video (usually empty). That leaves <strong>1, 3, 4 and 6</strong>: the close-ups, two per camera operator. (Here you see the five PTZs that face the stage.)",
     steps: [
       {
-        text: "Your controls are on <strong>Camera 1</strong> — its monitor has the colored border and its button is lit. Press camera button <strong>2</strong> on the RP150 (or tap Camera 2's monitor).",
-        when: (c) => c.activeRig === "2",
-        notYet: "Press the 2 button in the row of camera buttons.",
-        done: "Button 2 lit, Camera 2's monitor got the border, and the screen now says CAM 2. Every knob now changes Camera 2 — <em>always check which button is lit before you turn anything</em>.",
+        text: "Your controls are on <strong>Camera 1</strong> — its monitor has the colored border and its button is lit. Press camera button <strong>3</strong> on the RP150 (or tap Camera 3's monitor).",
+        when: (c) => c.activeRig === "3",
+        notYet: "Press the 3 button in the row of camera buttons.",
+        done: "Button 3 lit, Camera 3's monitor got the border, and the screen now says CAM 3. Every knob now changes Camera 3 — <em>always check which button is lit before you turn anything</em>.",
       },
       {
         text: "Which camera is the <strong>static wide</strong> — the safe shot that opens and closes the show, with everyone in it, bows included? Select it.",
-        when: (c) => c.activeRig === "3",
+        when: (c) => c.activeRig === "2",
         notYet: "Look for the widest shot that shows the whole ensemble, centered.",
-        done: "Camera 3. You can select it to read its screen, but you never move it or change it — it's the shot the switcher can always cut to.",
+        done: "Camera 2. You can select it to read its screen, but you never move it or change it — it's the shot the switcher can always cut to.",
       },
       {
         text: "Now select the camera that's on the <strong>flutes</strong>.",
@@ -995,11 +998,11 @@ export const stations = [
     bodyControls: true,
     rigs: MUSCO_RIGS({
       1: { aperture: 5, bPed: -8 },
-      2: { rGain: 40 },
+      3: { rGain: 40 },
       4: { wb: 5600, wbMode: "outdoor" },
     }),
     tools: { available: ["hud", "waveform"], on: [] },
-    intro: "Musco's house defaults for every PTZ: <strong>iris F5.6 · gain 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0</strong>. Camera 3 is set; three others aren't.",
+    intro: "Musco's house defaults for every PTZ: <strong>iris F5.6 · gain 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0</strong>. Camera 2, the static wide, is set; three others aren't.",
     steps: [
       {
         text: "Select <strong>Camera 1</strong> and read its screen. Two values are off the house defaults (this is the real screen from the booth photo). Fix both with the knobs.",
@@ -1012,12 +1015,12 @@ export const stations = [
         done: "F5.6 and blue pedestal 0. A pedestal off by −8 sinks the blue in the blacks — with everyone in black, the whole band looks yellowish next to the other cameras.",
       },
       {
-        text: "Camera 2's color is off — compare its monitor with Camera 3. There are two kinds of \"gain\" on this controller. Fix Camera 2 with the right one.",
-        when: (c) => c.rigs["2"].settings.rGain === 0 && Math.abs(c.rigs["2"].settings.gainStops) < 0.01,
+        text: "Camera 3's color is off — compare its monitor with Camera 2. There are two kinds of \"gain\" on this controller. Fix Camera 3 with the right one.",
+        when: (c) => c.rigs["3"].settings.rGain === 0 && Math.abs(c.rigs["3"].settings.gainStops) < 0.01,
         notYet: (c) =>
-          Math.abs(c.rigs["2"].settings.gainStops) > 0.01
+          Math.abs(c.rigs["3"].settings.gainStops) > 0.01
             ? "That's GAIN in dB — it brightens the whole picture (and adds noise). Put it back to 0 dB; color lives on the R/B GAIN knobs."
-            : `Camera 2's R GAIN is ${c.rigs["2"].settings.rGain > 0 ? "+" : ""}${c.rigs["2"].settings.rGain}.`,
+            : `Camera 3's R GAIN is ${c.rigs["3"].settings.rGain > 0 ? "+" : ""}${c.rigs["3"].settings.rGain}.`,
         done: "R GAIN is color (red, in the highlights); GAIN in dB is brightness. Same word, different job.",
       },
       {
@@ -1038,23 +1041,23 @@ export const stations = [
     scene: "musco-preshow",
     bodyControls: true,
     rigs: [
-      { id: "2", label: "Camera 2 · wide", camera: "ue150", start: { ...MUSCO_START, focal: 45 } },
-      { id: "3", label: "Camera 3 · static wide", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 52 } },
+      { id: "3", label: "Camera 3 · center", camera: "ue150", start: { ...MUSCO_START, focal: 45 } },
+      { id: "2", label: "Camera 2 · static wide", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 52 } },
     ],
     tools: { available: ["meter", "zebras", "hud"], on: ["meter"] },
     intro: "It's an hour before the Wind Symphony. Only the work lights are on.",
     steps: [
       {
-        text: "Camera 2 is at the house defaults, and the picture is dark under the work lights. Fix it the way it <em>looks right now</em>: bring the white needle to about 0 with the iris and gain.",
-        when: (c) => Math.abs(c.rigs["2"].derived.exposureStops) <= 0.5,
+        text: "Camera 3 is at the house defaults, and the picture is dark under the work lights. Fix it the way it <em>looks right now</em>: bring the white needle to about 0 with the iris and gain.",
+        when: (c) => Math.abs(c.rigs["3"].derived.exposureStops) <= 0.5,
         notYet: "Open the iris (turn IRIS up) and add GAIN until the white needle is near 0.",
         done: "Looks fine… for now.",
       },
       {
         enter: { scene: "musco-concert", keepSettings: true },
-        text: "Places! The house goes dark and the lighting designer brings up the concert cue. Look at Camera 2 now — then put it back where it belongs.",
-        when: (c) => Math.abs(c.rigs["2"].derived.exposureStops) <= 0.4 && c.rigs["2"].settings.aperture === 5.6 && Math.abs(c.rigs["2"].settings.gainStops) < 0.01,
-        notYet: (c) => (Math.abs(c.rigs["2"].derived.exposureStops) > 0.4 ? "Still off — the house defaults are made for this cue: F5.6 and 0 dB." : "Exposure's right; the house numbers are F5.6 and 0 dB."),
+        text: "Places! The house goes dark and the lighting designer brings up the concert cue. Look at Camera 3 now — then put it back where it belongs.",
+        when: (c) => Math.abs(c.rigs["3"].derived.exposureStops) <= 0.4 && c.rigs["3"].settings.aperture === 5.6 && Math.abs(c.rigs["3"].settings.gainStops) < 0.01,
+        notYet: (c) => (Math.abs(c.rigs["3"].derived.exposureStops) > 0.4 ? "Still off — the house defaults are made for this cue: F5.6 and 0 dB." : "Exposure's right; the house numbers are F5.6 and 0 dB."),
         done: "Blown out the moment the real lights came up — and the extra gain was noise for nothing. That's why the checklist says to ask for concert lighting, <strong>including the brightest cue</strong>, before you set anything: the house defaults are made for it.",
       },
     ],
@@ -1070,16 +1073,16 @@ export const stations = [
     bodyControls: true,
     rigs: MUSCO_RIGS({
       1: { aperture: 5, bPed: -8 },
-      2: { rGain: 40, gainDb: 6 },
+      3: { rGain: 40, gainDb: 6 },
       4: { wb: 5600, wbMode: "outdoor", mPed: 10 },
-      5: { wbMode: "auto", bGain: -30, auto: { aperture: true, focus: true } },
+      6: { wbMode: "auto", bGain: -30, auto: { aperture: true, focus: true } },
     }),
     tools: { available: ["meter", "waveform", "hud"], on: [] },
-    brief: "Twenty minutes to downbeat, under the brightest cue. Cameras 1, 2, 4 and 5 were left in a mess; Camera 3, the static wide, is right — and nobody touches it. Make every camera match Camera 3: same color, same brightness, same blacks. Cut between them on the multiview in your head: nothing should jump.",
-    goals: ["Cameras 1, 2, 4, 5: color, brightness and blacks match Camera 3", "Camera 3 untouched"],
+    brief: "Twenty minutes to downbeat, under the brightest cue. Cameras 1, 3, 4 and 6 were left in a mess; Camera 2, the static wide, is right — and nobody touches it. Make every camera match Camera 2: same color, same brightness, same blacks. Cut between them on the multiview in your head: nothing should jump.",
+    goals: ["Cameras 1, 3, 4, 6: color, brightness and blacks match Camera 2", "Camera 2 untouched"],
     criteria: [
-      ...["1", "2", "4", "5"].flatMap((id) => [checks.colorMatches("3", { rig: id }), checks.brightnessMatches("3", { rig: id }), checks.blacksMatch("3", { rig: id })]),
-      checks.untouched("3"),
+      ...["1", "3", "4", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
+      checks.untouched("2"),
     ],
     passNote: "One room. On the real controller you'd finish by comparing the multiview under the brightest cue — and on a vectorscope and waveform, if you have them.",
   },

@@ -106,21 +106,21 @@ for (const [w, h, tag] of [
   await knob("IRIS").locator('[data-dir="-1"]').click(); // F5.0 → F5.6 (turning down closes)
   for (let i = 0; i < 8; i++) await knob("B PED").locator('[data-dir="1"]').click();
   await check(page, true, "RP150: camera 1 iris + B ped");
-  await page.click('.rp-cam[data-cam="2"]');
+  await page.click('.rp-cam[data-cam="3"]');
   await page.evaluate(() => cameraLab.set("rGain", 1));
   await knob("R GAIN").locator('[data-dir="-1"]').click();
-  await check(page, true, "RP150: camera 2 R gain");
-  // camera 3 can be selected but not changed
-  await page.click('.rp-cam[data-cam="3"]');
+  await check(page, true, "RP150: camera 3 R gain");
+  // camera 2 (the static wide) can be selected but not changed
+  await page.click('.rp-cam[data-cam="2"]');
   const disabled = await knob("R GAIN").locator(".knob-step").first().isDisabled();
-  if (!disabled) failures.push("camera 3 (static wide) knobs should be disabled");
+  if (!disabled) failures.push("camera 2 (static wide) knobs should be disabled");
   await page.click('.rp-cam[data-cam="4"]');
   await page.click('[data-wb="indoor"]');
   await check(page, true, "RP150: camera 4 A/3200K");
   // shade everything and pass the challenge
   await open(page, "musco-shade-all");
   await page.evaluate(() => {
-    for (const i of [0, 1, 3, 4]) {
+    for (const i of [0, 2, 3, 4]) {
       cameraLab.rig(i);
       for (const [k, v] of Object.entries({ aperture: 5.6, gainStops: 0, wb: 3200, wbMode: "indoor", rGain: 0, bGain: 0, rPed: 0, bPed: 0, mPed: 0 })) cameraLab.set(k, v);
       cameraLab.auto("aperture", false);

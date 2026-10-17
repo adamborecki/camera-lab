@@ -74,7 +74,9 @@ Sources: [Panasonic 8–18 vs 7–14](https://mirrorlesscomparison.com/micro-fou
 
 ## Open questions for the instructor
 
-- Musco camera map: which multiview numbers are the PTZs each operator runs, the house
-  conductor cam, and is box 2 a separate camera from the static wide on 3?
+- Musco: the map is now 2 static wide, 5 conductor cam, 7 backstage, 8 PowerPoint, 1/3/4/6
+  close-ups (instructor, Oct 17) — but the gig checklist says "camera 3 is the static wide". Is
+  that an RP150 button number that differs from the ATEM input, or out of date? And which
+  operator runs which pair (1+3 and 4+6?).
 - RovoCam exposure settings in Salmon; the RovoControl + joystick workflow in detail (photos).
 - AX100 MANUAL button vs. PROGRAM AE; close-up photos of its side panel and LCD.

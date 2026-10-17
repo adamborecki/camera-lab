@@ -6,7 +6,7 @@
 // the zoom lever. Gain lives on the screen's F1 knob.
 //
 // Selecting a camera here selects that rig in the lab (one controller, many
-// cameras). Camera 3 is the static wide: you may look, never touch.
+// cameras). Camera 2 is the static wide: you may look, never touch.
 //
 // Unverified (README → Technical verification): knob ranges and step sizes,
 // what holding A/3200K does, F1 as the gain knob, and the screen's exact

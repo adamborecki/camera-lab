@@ -56,9 +56,10 @@ not published).
   shutter and gain to auto and auto exposure overexposes a dark hall.
 - The GH5 only has the 14–140 (28 mm eq. at its widest). A wider MFT lens is being considered.
 - Musco (from the MUS 248 Musco Gig Checklist): Panasonic UE150 PTZs on an RP150 controller;
-  house defaults F5.6 · 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0; **camera 3 is the static
-  wide — never touch it**; set exposure under the brightest cue. The rest of the camera map is a
-  placeholder (README → Technical verification).
+  house defaults F5.6 · 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0; set exposure under the
+  brightest cue. Multiview map (instructor, Oct 17): **2 static wide — never touch it**, 5
+  conductor cam, 7 backstage (useless), 8 PowerPoint/video (usually empty), 1/3/4/6 close-ups, two
+  per camera operator. The checklist says camera 3 is the static wide — open question (README).
 
 ## Git
 
