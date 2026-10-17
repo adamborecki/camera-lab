@@ -28,8 +28,8 @@ export class WbPad {
     this.grid = this.el.querySelector(".wb-pad-grid");
     this.dot = this.el.querySelector(".wb-pad-dot");
     this.valueEl = this.el.querySelector(".wb-pad-value");
-    const n = 2 * Math.max(opts.ab, opts.gm) + 1;
-    this.grid.style.setProperty("--cells", n);
+    this.grid.style.setProperty("--cols", 2 * opts.ab + 1);
+    this.grid.style.setProperty("--rows", 2 * opts.gm + 1);
     this.bind();
     this.draw();
   }
@@ -39,8 +39,10 @@ export class WbPad {
       const r = this.grid.getBoundingClientRect();
       const u = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
       const v = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      // One cell per step: (2·max + 1) across, the center cell is 0.
       const { ab, gm } = this.opts;
-      this.set(Math.round(-ab + u * 2 * ab), Math.round(gm - v * 2 * gm));
+      const cell = (t, max) => Math.min(2 * max, Math.floor(t * (2 * max + 1))) - max;
+      this.set(cell(u, ab), -cell(v, gm));
     };
     this.grid.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -68,7 +70,14 @@ export class WbPad {
     this.ab = ab;
     this.gm = gm;
     this.draw();
-    this.opts.onChange(ab, gm);
+    // Both axes can change in one tap; the host may redraw in between, so
+    // hold the dot where it is until both have landed.
+    this.busy = true;
+    try {
+      this.opts.onChange(ab, gm);
+    } finally {
+      this.busy = false;
+    }
   }
 
   // From outside (the settings changed some other way): move the dot only.
@@ -80,8 +89,8 @@ export class WbPad {
 
   draw() {
     const { ab, gm } = this.opts;
-    this.dot.style.left = `${((this.ab + ab) / (2 * ab)) * 100}%`;
-    this.dot.style.top = `${((gm - this.gm) / (2 * gm)) * 100}%`;
+    this.dot.style.left = `${((this.ab + ab + 0.5) / (2 * ab + 1)) * 100}%`;
+    this.dot.style.top = `${((gm - this.gm + 0.5) / (2 * gm + 1)) * 100}%`;
     const word = `${shiftWord(this.ab, "A", "B")} ${shiftWord(this.gm, "G", "M")}`.trim();
     this.valueEl.textContent = word || "0 (no shift)";
     this.grid.setAttribute("aria-valuetext", word || "no shift");

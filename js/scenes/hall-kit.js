@@ -12,32 +12,25 @@ import { ellipse, circle, rng } from "./draw.js";
 export const W = 1280;
 export const H = 720;
 
-// A camera at `pos`, pitched down by `pitchDeg` and turned right by `yawDeg`,
-// framing `equivFocal` (35mm-equivalent mm across the 1280 px width).
-export function makeCamera({ pos = [0, 5, 0], pitchDeg = 10, yawDeg = 0, equivFocal = 32 } = {}) {
+// A camera at `pos`, pitched down by `pitchDeg`, framing `equivFocal`
+// (35mm-equivalent mm across the 1280 px width).
+export function makeCamera({ pos = [0, 5, 0], pitchDeg = 10, equivFocal = 32 } = {}) {
   const th = (pitchDeg * Math.PI) / 180;
-  const ya = (yawDeg * Math.PI) / 180;
   const F = (W / 2) / (18 / equivFocal); // tan(hfov/2) = 18/f for a 36mm-wide frame
-  const fwd = [Math.sin(ya) * Math.cos(th), -Math.sin(th), Math.cos(ya) * Math.cos(th)];
-  const right = [Math.cos(ya), 0, -Math.sin(ya)];
-  const up = [fwd[1] * right[2] - fwd[2] * right[1], fwd[2] * right[0] - fwd[0] * right[2], fwd[0] * right[1] - fwd[1] * right[0]];
-  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const fwd = [0, -Math.sin(th), Math.cos(th)];
+  const up = [0, Math.cos(th), Math.sin(th)];
   const cam = {
     pos,
     F,
-    pitchDeg,
-    yawDeg,
-    equivFocal,
     // world → [screen x, screen y, depth along the view axis]
     p(x, y, z) {
       const d = [x - pos[0], y - pos[1], z - pos[2]];
-      const zc = dot(d, fwd);
-      const xc = dot(d, right);
-      const yc = dot(d, up);
+      const zc = d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2];
+      const yc = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
       const k = F / Math.max(zc, 0.05);
-      return [W / 2 + xc * k, H / 2 - yc * k, zc];
+      return [W / 2 + d[0] * k, H / 2 - yc * k, zc];
     },
-    // pixels per meter for something standing at depth z
+  // pixels per meter for something standing at depth z
     scaleAt(x, z) {
       return cam.p(x, 0, z)[2] > 0 ? F / cam.p(x, 0, z)[2] : 1;
     },
@@ -54,7 +47,6 @@ export function makeCamera({ pos = [0, 5, 0], pitchDeg = 10, yawDeg = 0, equivFo
   return cam;
 }
 
-// Fill a world-space polygon.
 // Points closer than NEAR (meters along the view axis) are cut off before
 // projecting, so a wall or floor that runs behind a camera standing inside
 // the room (the lens-shopping views) still draws as the part in front of it.
@@ -76,6 +68,7 @@ function clipNear(cam, pts) {
   return out;
 }
 
+// Fill a world-space polygon.
 export function poly(ctx, cam, pts, fill, stroke, lw = 1) {
   ctx.beginPath();
   clipNear(cam, pts).forEach(([x, y, z], i) => {

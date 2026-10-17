@@ -789,8 +789,8 @@ main:has(.stage-lab:not([hidden])) {
   border: 1px solid #4a4b54;
   /* tinted toward each corner, with a cell grid on top */
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / calc(100% / var(--cells)) 100%,
-    linear-gradient(0deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 100% calc(100% / var(--cells)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / calc(100% / var(--cols)) 100%,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px) 0 0 / 100% calc(100% / var(--rows)),
     linear-gradient(90deg, rgba(90, 140, 255, 0.35), transparent 45%, transparent 55%, rgba(255, 160, 60, 0.35)),
     linear-gradient(180deg, rgba(90, 220, 110, 0.35), transparent 45%, transparent 55%, rgba(230, 100, 220, 0.35)),
     #15161a;

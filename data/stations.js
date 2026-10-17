@@ -926,7 +926,7 @@ export const stations = [
       },
       {
         enter: { scene: "salmon-aisle15-chamber-orchestra", camera: "gh5-14-140" },
-        text: "Now the camera is on a tripod in the <strong>center aisle</strong>, about 5 m from the stage — a closer second angle, or a wide when the booth view is blocked. The chamber orchestra is on, conductor and all. <strong>Zoom all the way out</strong> again.",
+        text: "Now the camera is on a tripod in the <strong>center aisle</strong>, a few rows from the front — about 3 m short of where the performers sit, a closer second angle, or a wide when the booth view is blocked. The chamber orchestra is on, conductor and all. <strong>Zoom all the way out</strong> again.",
         when: atWidest,
         notYet: "Zoom all the way out, then check.",
         done: (c) =>

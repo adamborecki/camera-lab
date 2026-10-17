@@ -9,8 +9,9 @@ import { makeHallScene, SALMON_PROGRAM_IDS, WIDE_VIEWS, WIDE_PROGRAM_IDS } from 
 const salmon = SALMON_PROGRAM_IDS.map((id) => makeHallScene("salmon", id));
 const auditorium = ["piano-solo", "voice-strings", "choir", "chamber-orchestra"].map((id) => makeHallScene("auditorium", id));
 
-// Salmon drawn at 15 mm from the booth and the aisle, for lens shopping.
-const wide = WIDE_VIEWS.flatMap((v) => WIDE_PROGRAM_IDS.map((id) => makeHallScene("salmon", id, v)));
+// Salmon drawn at 15 mm from the booth, the aisle and down front, for Lens Shopping.
+// Hidden from scene menus that aren't asking for them by name.
+const wide = WIDE_VIEWS.flatMap((v) => WIDE_PROGRAM_IDS.map((id) => ({ ...makeHallScene("salmon", id, v), hidden: true })));
 
 export const scenes = [stageScene, parkScene, ...salmon, ...auditorium, ...wide];
 
