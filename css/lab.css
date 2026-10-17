@@ -504,6 +504,8 @@ main:has(.stage-lab:not([hidden])) {
 
 .lab-side {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 0.8rem;
   align-content: start;
 }
@@ -570,6 +572,8 @@ main:has(.stage-lab:not([hidden])) {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  max-width: 100%;
+  min-width: 0;
   font-size: 0.8rem;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -577,6 +581,11 @@ main:has(.stage-lab:not([hidden])) {
   font-weight: 700;
 }
 .picker select {
+  /* long names (a scene title, a lens) shrink instead of pushing off a phone */
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
   font: inherit;
   text-transform: none;
   letter-spacing: 0;

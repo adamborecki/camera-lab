@@ -555,10 +555,16 @@ export function makeSalmonScene(programId = "piano-solo") {
   return makeHallScene("salmon", programId);
 }
 
-export function makeHallScene(roomId, programId = "piano-solo") {
+// `view` (optional) puts the camera somewhere else and/or draws the hall wider
+// than the booth's usual 32 mm: { id, label, cam: { pos, pitchDeg,
+// equivFocal }, audience }. The lens-shopping station uses it to show what a
+// wide lens sees from the booth and from the center aisle.
+export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   const room = ROOMS[roomId];
   const program = PROGRAMS[programId] || PROGRAMS["piano-solo"];
-  const cam = K.makeCamera(CAM);
+  const camDef = view?.cam || CAM;
+  const cam = K.makeCamera(camDef);
+  const floorNear = Math.max(7, camDef.pos[2] + 2.5);
   const items = program.items().sort((a, b) => b.z - a.z);
   const people = items.filter((i) => i.person).map((i) => i.person);
   const dim = !!program.dim;
@@ -603,33 +609,37 @@ export function makeHallScene(roomId, programId = "piano-solo") {
     {
       id: "floor",
       name: "Stage floor",
-      depthRange: { far: cam.dist(0, 0, BACK_Z), near: cam.dist(0, 0, 7), vFar: cam.uv(0, 0, BACK_Z)[1], vNear: cam.uv(0, 0, 7)[1] },
+      depthRange: { far: cam.dist(0, 0, BACK_Z), near: cam.dist(0, 0, floorNear), vFar: cam.uv(0, 0, BACK_Z)[1], vNear: Math.min(1, cam.uv(0, 0, floorNear)[1]) },
       light: "stage",
       draw: (ctx, w, h) => room.floor(ctx, w, h, cam, { dim }),
     },
     ...stageLayers,
     ...(room.mics ? [{ id: "mics", name: "Hanging mic pair", depth: cam.dist(0, 3.6, 13.5), light: "walls", draw: (ctx, w, h) => drawMics(ctx, w, h, cam), noFocus: true }] : []),
     ...moverLayers(program, cam, people),
-    {
-      id: "audience",
-      name: "Audience",
-      depthRange: { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
-      light: "house",
-      draw: (ctx) => K.audience(ctx, cam, audienceRows, programId.length),
-    },
-  ].slice(0, 10);
+    view?.audience === false
+      ? null
+      : {
+          id: "audience",
+          name: "Audience",
+          depthRange: { far: 5.0, near: 3.4, vFar: 0.85, vNear: 1.0 },
+          light: "house",
+          draw: (ctx) => K.audience(ctx, cam, audienceRows, programId.length),
+        },
+  ]
+    .filter(Boolean)
+    .slice(0, 10);
 
   const aim = [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
   return {
-    id: `${roomId}-${programId}`,
-    title: `${room.title} — ${program.title}`,
+    id: view ? `${roomId}-${view.id}-${programId}` : `${roomId}-${programId}`,
+    title: view ? `${room.title} — ${program.title}, ${view.label}` : `${room.title} — ${program.title}`,
     room: roomId,
     program: programId,
     blurb: room.blurb,
     // Salmon: F4 · 3 dB · 1/60 on an AX100 is correct exposure (dim programs
     // are two stops darker — that's when you open up).
     ev100: room.ev100(dim),
-    equivFocal: CAM.equivFocal,
+    equivFocal: camDef.equivFocal,
     maxFrameZoom: 3.5,
     aim,
     framing: box,
@@ -653,3 +663,15 @@ export function makeHallScene(roomId, programId = "piano-solo") {
 }
 
 export const SALMON_PROGRAM_IDS = Object.keys(PROGRAMS);
+
+// Salmon drawn wider than any lens Chapman owns (15 mm equivalent), from two
+// places a camera could stand: the booth, where the static wide lives, and the
+// center aisle a few rows back, and down front at the edge of the stage —
+// the closer the camera, the wider the lens it needs. For the lens-shopping
+// station.
+export const WIDE_VIEWS = [
+  { id: "booth15", label: "from the booth", cam: { pos: [0, 5.0, 0], pitchDeg: 14, equivFocal: 15 } },
+  { id: "aisle15", label: "from the center aisle", cam: { pos: [0, 1.6, 5.0], pitchDeg: 3, equivFocal: 15 }, audience: false },
+  { id: "front15", label: "down front", cam: { pos: [0, 1.3, 7.0], pitchDeg: 2, equivFocal: 15 }, audience: false },
+];
+export const WIDE_PROGRAM_IDS = ["mariachi", "choir", "chamber-orchestra", "cme"];

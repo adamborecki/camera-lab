@@ -175,7 +175,52 @@ export const rovocam = {
   hidden: true,
 };
 
-export const allCameras = [...cameras, rovocam];
+// The GH5 with each lens on the shortlist for a wider Salmon/backup wide
+// (docs/COURSE_PLAN.md). Same body; only the lens changes. Hidden from the
+// usual camera menus — the lens-shopping station offers them. Ranges and
+// apertures are from the makers' spec sheets; equivalent = 2 × on MFT.
+const gh5 = cameras.find((c) => c.id === "gh5");
+const withLens = (id, short, blurb, lens, minAperture) => ({
+  ...gh5,
+  id,
+  name: `GH5 + ${short}`,
+  blurb,
+  aperture: { min: minAperture, max: 22 },
+  lens,
+  hidden: true,
+});
+export const gh5Lenses = [
+  withLens(
+    "gh5-14-140",
+    "Lumix 14–140mm (owned)",
+    "The lens Chapman's GH5s wear: 28–280 mm equivalent, f/3.5–5.6. Huge zoom range, but 28 mm is as wide as it gets.",
+    { name: "Lumix G Vario 14–140mm f/3.5–5.6", wide: 28, tele: 280, apWide: 3.5, apTele: 5.6 },
+    3.5,
+  ),
+  withLens(
+    "gh5-12-60",
+    "Lumix 12–60mm",
+    "Lumix G Vario 12–60mm f/3.5–5.6: 24–120 mm equivalent. A little wider than the 14–140 and still a useful zoom; autofocus.",
+    { name: "Lumix G Vario 12–60mm f/3.5–5.6", wide: 24, tele: 120, apWide: 3.5, apTele: 5.6 },
+    3.5,
+  ),
+  withLens(
+    "gh5-9-18",
+    "Olympus 9–18mm",
+    "Olympus M.Zuiko 9–18mm f/4–5.6: 18–36 mm equivalent. A wide zoom, small and light; autofocus.",
+    { name: "Olympus M.Zuiko 9–18mm f/4–5.6", wide: 18, tele: 36, apWide: 4, apTele: 5.6 },
+    4,
+  ),
+  withLens(
+    "gh5-7-5",
+    "Laowa 7.5mm",
+    "Laowa 7.5mm f/2: 15 mm equivalent, a prime — no zoom at all, and manual focus (fine for a static wide that never moves). Bright: f/2.",
+    { name: "Laowa 7.5mm f/2", wide: 15, tele: 15, apWide: 2, apTele: 2 },
+    2,
+  ),
+];
+
+export const allCameras = [...cameras, rovocam, ...gh5Lenses];
 
 export function getCamera(id) {
   return allCameras.find((c) => c.id === id) || cameras[0];

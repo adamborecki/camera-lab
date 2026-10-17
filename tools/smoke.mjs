@@ -117,9 +117,37 @@ for (const [w, h, tag] of [
   await page.close();
 }
 
+// ---- Lens Shopping (phone size: the lens menu has to work there) ----
+{
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  page.on("pageerror", (e) => failures.push(`lens-shopping pageerror: ${e.message}`));
+  await open(page, "lens-shopping");
+  const widest = () => page.evaluate(() => cameraLab.set("focal", 1));
+  const lens = async (id) => {
+    await page.selectOption(".picker select", id);
+    await page.waitForTimeout(150);
+    await widest();
+  };
+  await check(page, false, "booth: not zoomed out yet");
+  await widest();
+  await check(page, true, "booth: zoomed out");
+  await widest();
+  await check(page, true, "aisle: zoomed out");
+  await check(page, false, "aisle: 14–140 can't fit the choir");
+  await lens("gh5-7-5");
+  await check(page, false, "aisle: Laowa fits but is wider than needed");
+  await lens("gh5-12-60");
+  await check(page, true, "aisle: 12–60");
+  await lens("gh5-12-60");
+  await check(page, false, "front: 12–60 too long");
+  await lens("gh5-9-18");
+  await check(page, true, "front: 9–18");
+  await page.close();
+}
+
 await browser.close();
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100 + livestream walkthroughs`);
+console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100, livestream and lens-shopping walkthroughs`);

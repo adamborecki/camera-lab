@@ -170,3 +170,21 @@ test("AX100 white-balance step judges what the camera applies, not the dial", ()
   assert.equal(at({ wbMode: "temp", wb: 3200 }), true);
   assert.equal(at({ wbMode: "temp", wb: 3200, wbAB: 2 }), false, "no shift");
 });
+
+test("Lens Shopping: every 'longest lens that fits' step has an answer that really fits", async () => {
+  const { bestLens } = await import("../data/stations.js");
+  const s = stations.find((x) => x.id === "lens-shopping");
+  const scenes = [s.scene, ...s.steps.map((st) => st.enter?.scene).filter(Boolean)];
+  for (const id of scenes) {
+    const scene = getScene(id);
+    const best = bestLens(scene);
+    assert.ok(best, `${id}: no lens fits`);
+    // Same check as the framing station, from the browser's own view math.
+    const { min } = focalRange(scene, best);
+    const r = rig(scene, best.id, { ...s.start, focal: min });
+    assert.ok(checks.framing({ minFill: 0 }).test(ctxFor({ main: r }, "main")).pass, `${id}: ${best.id} at its widest doesn't frame everyone`);
+    assert.ok(s.cameras.includes(best.id));
+  }
+  // The point of the station: the answer changes as the camera moves closer.
+  assert.deepEqual(scenes.map((id) => bestLens(getScene(id)).id), ["gh5-14-140", "gh5-12-60", "gh5-9-18"]);
+});

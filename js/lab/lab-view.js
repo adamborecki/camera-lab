@@ -510,7 +510,8 @@ export function mountLab(container, station) {
   // ---------- scene / camera pickers ----------
   function buildPickers() {
     pickersEl.innerHTML = "";
-    const allowedCams = station.cameras ? cameras.filter((c) => station.cameras.includes(c.id)) : cameras;
+    // A station's own list may name hidden bodies (the GH5 lens options).
+    const allowedCams = station.cameras ? station.cameras.map(getCamera) : cameras;
     if (station.cameraChoice && !rigs[active].def.reference) {
       pickersEl.appendChild(picker("Camera", allowedCams, camera.id, (id) => setCamera(id)));
     }

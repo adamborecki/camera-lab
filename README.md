@@ -18,6 +18,7 @@ Stations are grouped into weekly homeworks (the `SECTIONS` in `data/stations.js`
 | Homework 1 — Exposure Basics | aperture, shutter, ISO/gain, frame rate, the exposure triangle |
 | Homework 2 — Go Further | white balance, ND, focus & depth of field, sensor size, three challenges |
 | Homework 3 — Standard Gear Kit & Salmon | warm-ups on a random body (spaced retrieval of HW1–2), the AX100's real controls and traps, framing a static wide, matching cameras (AX100↔AX100, GH5→AX100, AX100→RovoCam), the Salmon livestream, a two-camera gig challenge |
+| Free play | the Playground (everything unlocked), and **Lens Shopping**: the GH5 with the owned 14–140 and three wider candidates (Lumix 12–60, Olympus 9–18, Laowa 7.5) from the booth, the center aisle and down front in Salmon — find the longest lens that still fits everyone |
 
 Planned next (not built): Musco — Panasonic PTZ cameras on the RP150 controller, shading (iris, gain, R/B gain, pedestal) across 4–6 cameras, the ATEM Constellation with program/preview/ISOs and calling shots. Pedagogy notes and the arc are in [`docs/COURSE_PLAN.md`](docs/COURSE_PLAN.md).
 
@@ -36,7 +37,7 @@ The original design brief is in [`docs/design-handoff.txt`](docs/design-handoff.
 ```bash
 npm test                     # node --test: physics, station data, every challenge is passable
 python3 -m http.server 8124 &
-node tools/smoke.mjs         # headless Chromium: every station, desktop + phone, AX100 & livestream walkthroughs
+node tools/smoke.mjs         # headless Chromium: every station, desktop + phone, AX100, livestream & lens-shopping walkthroughs
 ```
 
 `npm test` brute-forces each single-camera challenge on every body it can hand out, and checks a known-good answer for each multi-camera one — an impossible step has shipped before. See [`CLAUDE.md`](CLAUDE.md).
@@ -105,6 +106,7 @@ Not yet checked on the real gear — confirm before treating as instructions:
 - RovoCam: its exposure settings in Salmon (sim: F4 · 3 dB · 1/60 — unknown) and the iris range at tele.
 - Salmon's AWB result (`scene.awb` = 3800K A5 G2) encodes the instructor's observation that an AX100 at those numbers matches the RovoCam — not a measurement.
 - Each body's `colorBias` is illustrative, not measured.
+- Salmon's dimensions (booth ~19 m from the back wall, stage ~17 m wide, booth eye height 5 m) are estimated from photos, not measured. Lens Shopping's answers (booth: anything; aisle at 5 m: 24 mm or wider; down front: 18 mm or wider) depend on them — a tape measure from the booth window and the aisle to the stage would settle which lens is worth buying.
 - Salmon livestream: the multiview layout beyond the booth photo, Camera 1 vs 2 assignment, and the Production Studio 4K → Mini Extreme ISO chain.
 
 ## Finish & Canvas

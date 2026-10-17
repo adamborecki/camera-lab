@@ -48,9 +48,30 @@ export function makeCamera({ pos = [0, 5, 0], pitchDeg = 10, equivFocal = 32 } =
 }
 
 // Fill a world-space polygon.
+// Points closer than NEAR (meters along the view axis) are cut off before
+// projecting, so a wall or floor that runs behind a camera standing inside
+// the room (the lens-shopping views) still draws as the part in front of it.
+const NEAR = 0.1;
+const depthOf = (cam, [x, y, z]) => cam.p(x, y, z)[2];
+function clipNear(cam, pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const da = depthOf(cam, a);
+    const db = depthOf(cam, b);
+    if (da >= NEAR) out.push(a);
+    if (da >= NEAR !== db >= NEAR) {
+      const t = (NEAR - da) / (db - da);
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+    }
+  }
+  return out;
+}
+
 export function poly(ctx, cam, pts, fill, stroke, lw = 1) {
   ctx.beginPath();
-  pts.forEach(([x, y, z], i) => {
+  clipNear(cam, pts).forEach(([x, y, z], i) => {
     const [sx, sy] = cam.p(x, y, z);
     i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
   });
@@ -67,6 +88,15 @@ export function poly(ctx, cam, pts, fill, stroke, lw = 1) {
 }
 
 export function line(ctx, cam, a, b, color, lw) {
+  const da = depthOf(cam, a);
+  const db = depthOf(cam, b);
+  if (da < NEAR && db < NEAR) return;
+  if (da < NEAR || db < NEAR) {
+    const t = (NEAR - da) / (db - da);
+    const m = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    if (da < NEAR) a = m;
+    else b = m;
+  }
   const [x0, y0] = cam.p(...a);
   const [x1, y1] = cam.p(...b);
   ctx.strokeStyle = color;
