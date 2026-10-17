@@ -391,6 +391,29 @@ export const INSTRUMENTS = {
   sing(ctx, i) {
     arms(ctx, i, "folder");
   },
+  // a singer with a handheld mic at the mouth
+  handMic(ctx, i) {
+    const { fx, k, shoulderY, headY, headR, look } = i;
+    limb(ctx, look.top, 0.085 * k, [[fx + 0.2 * k, shoulderY + 0.05 * k], [fx + 0.24 * k, shoulderY + 0.3 * k], [fx + 0.06 * k, headY + headR * 1.3]]);
+    limb(ctx, "#1a1a1c", 0.045 * k, [[fx + 0.05 * k, headY + headR * 1.25], [fx + 0.1 * k, headY + headR * 2.6]]);
+    circle(ctx, fx + 0.03 * k, headY + headR * 1.05, 0.045 * k, "#9da3a8");
+    limb(ctx, look.top, 0.085 * k, [[fx - 0.2 * k, shoulderY + 0.05 * k], [fx - 0.22 * k, shoulderY + 0.62 * k]]);
+  },
+  // electric guitar / bass, slung low
+  eguitar(ctx, i, o) {
+    const { fx, k, shoulderY, hipY, look } = i;
+    const col = o.color || "#a8231c";
+    ctx.save();
+    ctx.translate(fx, hipY - 0.05 * k);
+    ctx.rotate(-0.35);
+    ellipse(ctx, -0.02 * k, 0, 0.2 * k, 0.13 * k, col);
+    ctx.fillStyle = "#2a1a10";
+    ctx.fillRect(0.12 * k, -0.02 * k, (o.bass ? 0.7 : 0.5) * k, 0.04 * k);
+    ctx.restore();
+    limb(ctx, "#2a2a2c", 0.02 * k, [[fx - 0.18 * k, shoulderY + 0.02 * k], [fx + 0.15 * k, hipY - 0.1 * k]]);
+    limb(ctx, look.top, 0.085 * k, [[fx - 0.2 * k, shoulderY + 0.05 * k], [fx - 0.2 * k, shoulderY + 0.35 * k], [fx - 0.02 * k, hipY - 0.1 * k]]);
+    limb(ctx, look.top, 0.085 * k, [[fx + 0.2 * k, shoulderY + 0.05 * k], [fx + 0.3 * k, shoulderY + 0.25 * k], [fx + 0.42 * k, hipY - 0.25 * k]]);
+  },
   singFree(ctx, i) {
     arms(ctx, i, "down");
   },
@@ -622,4 +645,24 @@ export function audience(ctx, cam, rows, seed = 3) {
       circle(ctx, sx, sy, 0.11 * k, HAIR[Math.floor(r() * 6)]);
     }
   }
+}
+
+export function amp(ctx, cam, x, z, w = 0.6, h = 0.55, grill = "#2a2a2e") {
+  K_box(ctx, cam, x, z, w, h, 0.3, "#151517", "#0c0c0d");
+  poly(ctx, cam, [[x - w / 2 + 0.05, 0.08, z - 0.15], [x + w / 2 - 0.05, 0.08, z - 0.15], [x + w / 2 - 0.05, h - 0.12, z - 0.15], [x - w / 2 + 0.05, h - 0.12, z - 0.15]], grill);
+}
+
+// keyboard on an X stand
+export function keyboard(ctx, cam, x, z) {
+  const k = cam.scaleAt(x, z);
+  line(ctx, cam, [x - 0.45, 0, z - 0.15], [x + 0.45, 0.85, z + 0.15], "#2a2a2e", 0.03 * k);
+  line(ctx, cam, [x + 0.45, 0, z - 0.15], [x - 0.45, 0.85, z + 0.15], "#2a2a2e", 0.03 * k);
+  K_box(ctx, cam, x, z, 1.25, 0.1, 0.35, "#1b1b1e", "#111113", 0.85);
+  poly(ctx, cam, [[x - 0.58, 0.96, z - 0.17], [x + 0.58, 0.96, z - 0.17], [x + 0.58, 0.96, z - 0.05], [x - 0.58, 0.96, z - 0.05]], "#ece8de");
+}
+
+// an axis-aligned box: front face toward the house, top face
+function K_box(ctx, cam, x, z, w, h, d, top, front, y0 = 0) {
+  poly(ctx, cam, [[x - w / 2, y0 + h, z - d / 2], [x + w / 2, y0 + h, z - d / 2], [x + w / 2, y0 + h, z + d / 2], [x - w / 2, y0 + h, z + d / 2]], top);
+  poly(ctx, cam, [[x - w / 2, y0, z - d / 2], [x + w / 2, y0, z - d / 2], [x + w / 2, y0 + h, z - d / 2], [x - w / 2, y0 + h, z - d / 2]], front);
 }

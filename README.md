@@ -68,7 +68,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 ### Scenes
 
 - **Concert Stage** and **Sunny Park** — the original illustrated scenes.
-- **Salmon Recital Hall** (`js/scenes/salmon.js`) — the hall from the booth, drawn in real perspective (`js/scenes/hall-kit.js` projects every wall, riser and performer from meters) after the instructor's photos in `docs/reference/`. Twelve programs: solo piano, violin/clarinet/brass with piano, piano duo, solo guitar, choir on risers, mariachi, percussion setup, early music in low light, chamber orchestra, singer with string quartet. Exposure is set so the AX100's Salmon numbers (F4 · 3 dB · 1/60) are correct.
+- **Salmon Recital Hall** (`js/scenes/salmon.js`) — the hall from the booth, drawn in real perspective (`js/scenes/hall-kit.js` projects every wall, riser and performer from meters) after the instructor's photos in `docs/reference/`. Fourteen programs: solo piano, violin/clarinet/brass with piano, piano duo, solo guitar, choir on risers, mariachi, vocal jazz (singers at mics with piano, bass, drums, guitar), CME (band with keys, guitars, drums, singers, horn, wedges and PA), percussion setup, early music in low light, chamber orchestra, singer with string quartet. Exposure is set so the AX100's Salmon numbers (F4 · 3 dB · 1/60) are correct.
 - **Auditorium** — the same programs in a generic dark proscenium hall: a Standard Gear Kit gig anywhere, and the room where auto exposure fails.
 
 ### Camera bodies with their real controls

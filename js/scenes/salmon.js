@@ -313,6 +313,50 @@ export const PROGRAMS = {
     },
     movers: ["conductor"],
   },
+  "vocal-jazz": {
+    title: "Vocal jazz",
+    items: () => {
+      const out = [];
+      // singers in a shallow arc at mic stands, rhythm section behind
+      [-3.6, -2.2, -0.8, 0.6, 2.0, 3.4].forEach((x, i) => {
+        const z = 12.0 + Math.abs(x) * 0.08;
+        out.push(T(z - 0.25, x, (ctx, cam) => K.micStand(ctx, cam, x + 0.15, z - 0.35, 1.5)));
+        out.push(P({ x, z, pose: "stand", inst: i % 2 ? "handMic" : "singFree", dress: i % 3 === 1, look: L(700 + i, { long: i % 2 === 0 }) }));
+      });
+      out.push(...pianoWithPlayer(-4.6, 15.0, 710, { len: 1.8 }));
+      out.push(P({ x: -0.8, z: 15.4, pose: "stand", inst: "bass", look: L(711) }));
+      out.push(T(15.8, 1.6, (ctx, cam) => K.drumKit(ctx, cam, 1.6, 15.8)));
+      out.push(P({ x: 1.6, z: 16.3, pose: "sit", look: L(712) }));
+      out.push(T(15.4, 4.2, (ctx, cam) => K.amp(ctx, cam, 4.6, 15.6)));
+      out.push(T(15.0, 4.0, (ctx, cam) => K.chair(ctx, cam, 3.9, 15.0)));
+      out.push(P({ x: 3.9, z: 14.8, pose: "sit", inst: "guitar", look: L(713) }));
+      for (const [x, z, r] of [[-2.4, 11.0, 0.3], [0.2, 11.0, 0], [2.6, 11.0, -0.3]]) out.push(T(z, x, (ctx, cam) => K.wedge(ctx, cam, x, z, r)));
+      return out;
+    },
+  },
+  cme: {
+    title: "Commercial Music Ensemble",
+    items: () => {
+      const out = [];
+      out.push(T(17.6, -5.2, (ctx, cam) => K.speakerOnPole(ctx, cam, -6.6, 12.0)));
+      out.push(T(17.6, 5.2, (ctx, cam) => K.speakerOnPole(ctx, cam, 6.6, 12.0)));
+      out.push(T(16.2, 0, (ctx, cam) => K.drumKit(ctx, cam, 0, 16.2)));
+      out.push(P({ x: 0, z: 16.7, pose: "sit", look: L(800, { top: "#1d2a3a" }) }));
+      out.push(T(15.6, -2.4, (ctx, cam) => K.amp(ctx, cam, -2.6, 16.0, 0.7, 0.75)));
+      out.push(T(15.6, 2.6, (ctx, cam) => K.amp(ctx, cam, 2.8, 16.0, 0.8, 0.9)));
+      out.push(P({ x: -2.4, z: 14.6, pose: "stand", inst: "eguitar", look: L(801, { top: "#3a3a40" }) }));
+      out.push(P({ x: 2.6, z: 14.6, pose: "stand", inst: "eguitar", color: "#d8d2c0", bass: true, look: L(802, { top: "#5a1e2a" }) }));
+      out.push(T(14.4, -5.0, (ctx, cam) => K.keyboard(ctx, cam, -5.0, 14.6)));
+      out.push(P({ x: -5.0, z: 15.2, pose: "stand", look: L(803, { top: "#2a3a2a" }) }));
+      [-1.0, 1.0].forEach((x, i) => {
+        out.push(T(12.1, x, (ctx, cam) => K.micStand(ctx, cam, x + 0.1, 12.0, 1.55)));
+        out.push(P({ x, z: 12.4, pose: "stand", inst: "handMic", look: L(804 + i, { top: i ? "#6a2a6a" : "#e8e2d4", long: !i }) }));
+      });
+      out.push(P({ x: 4.6, z: 13.4, pose: "stand", inst: "trumpet", look: L(806) }));
+      for (const [x, z, r] of [[-2.0, 11.2, 0.25], [1.4, 11.2, -0.1], [4.2, 12.0, -0.3]]) out.push(T(z, x, (ctx, cam) => K.wedge(ctx, cam, x, z, r)));
+      return out;
+    },
+  },
   "voice-strings": {
     title: "Singer, string quartet + piano",
     items: () => [
