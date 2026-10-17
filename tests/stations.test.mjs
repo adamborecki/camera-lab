@@ -79,7 +79,7 @@ const ANSWERS = {
   "match-two-ax100": { B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", nd: 0, auto: { focus: true } } },
   "match-rovocam": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbAB: 5, wbGM: 2, auto: { focus: true } } },
   "sgk-gig": {
-    A: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", focal: 40, auto: { focus: true }, recording: true },
+    A: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", focal: 34, auto: { focus: true }, recording: true },
     B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, nd: 0, focal: 36, auto: { focus: true }, recording: true },
   },
 };

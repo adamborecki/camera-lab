@@ -59,7 +59,8 @@ not published).
   house defaults F5.6 · 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0; set exposure under the
   brightest cue. Multiview map (instructor, Oct 17): **2 static wide — never touch it**, 5
   conductor cam, 7 backstage (useless), 8 PowerPoint/video (usually empty), 1/3/4/6 close-ups, two
-  per camera operator. The checklist says camera 3 is the static wide — open question (README).
+  per camera operator (who runs which pair is decided at the gig). Numbers are the Panasonic
+  cameras' own, the same on the RP150 and the multiview.
 
 ## Git
 

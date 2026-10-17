@@ -12,6 +12,8 @@ import { Renderer } from "../render/renderer.js";
 import { getScene, scenes } from "../scenes/index.js";
 import { cameras, getCamera } from "../../data/cameras.js";
 import {
+  frameCenter,
+  MAX_FRAME_ZOOM,
   derive,
   normalizeSettings,
   settingsFromPreset,
@@ -132,6 +134,7 @@ export function mountLab(container, station) {
           <button type="button" class="rec-btn" aria-pressed="false" aria-label="Record">●</button>
           <p class="viewport-hint">Tap the picture to focus</p>
         </div>
+        <p class="scene-tag" hidden></p>
         <div class="tool-chips" role="group" aria-label="Monitoring tools"></div>
         <div class="tool-panels" hidden></div>
       </div>
@@ -146,6 +149,13 @@ export function mountLab(container, station) {
     </div>`;
 
   const viewport = container.querySelector(".viewport");
+  const sceneTag = container.querySelector(".scene-tag");
+  // Which room this is — the halls share a stage and performers, so without
+  // a label the dark auditorium reads as "Salmon with black walls".
+  function showSceneTag() {
+    sceneTag.hidden = !scene.room;
+    if (scene.room) sceneTag.textContent = `📍 ${scene.title}${scene.room === "auditorium" ? " — a generic dark hall, not Salmon" : ""}`;
+  }
   const wall = container.querySelector(".monitor-wall");
   const canvas = container.querySelector(".viewport-canvas");
   const reticle = container.querySelector(".reticle");
@@ -617,6 +627,7 @@ export function mountLab(container, station) {
   function setScene(id, extraSettings, keepSettings = false) {
     scene = getScene(id);
     renderer.setScene(scene);
+    showSceneTag();
     if (keepSettings) {
       saveActive();
       for (const rig of rigs) {
@@ -686,13 +697,11 @@ export function mountLab(container, station) {
   let magCenter = { x: 0.65, y: 0.35 };
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   function frameView(rig) {
-    // A tighter shot is aimed at the scene's subject (or where this rig's
-    // operator points it), the way an operator recomposes as they zoom; the
-    // clamp keeps the frame inside the drawn scene.
+    // The camera points at the scene's subject (or where this rig's operator
+    // aimed it); zooming scales straight in on that point (frameCenter).
     const frame = rig.derived.frameZoom;
-    const half = 0.5 / frame;
-    const [aimX, aimY] = rig.def.aim || scene.aim || [0.5, 0.5];
-    return { x: clamp(aimX, half, 1 - half), y: clamp(aimY, half, 1 - half), zoom: frame };
+    const c = frameCenter(rig.def.aim || scene.aim, frame, scene.maxFrameZoom || MAX_FRAME_ZOOM);
+    return { x: c.x, y: c.y, zoom: frame };
   }
   function currentView(rig) {
     const f = frameView(rig);
@@ -974,6 +983,7 @@ export function mountLab(container, station) {
     return { camera: camera.name, scene: scene.id, settings: sum.join(" · ") };
   };
   renderer.setScene(scene);
+  showSceneTag();
   buildWall();
   buildControls();
   buildChips();

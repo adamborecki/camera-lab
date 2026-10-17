@@ -543,8 +543,8 @@ const ROOMS = {
     awb: { kelvin: 3800, ab: 5, gm: 2 },
   },
   auditorium: {
-    title: "Auditorium",
-    blurb: "A proscenium hall with the house lights down — a typical Standard Gear Kit gig.",
+    title: "Dark auditorium",
+    blurb: "A generic proscenium hall with the house lights down — a Standard Gear Kit gig anywhere. Not Salmon: black masking, a dark house.",
     walls: drawAuditorium,
     floor: drawAuditoriumFloor,
     mics: false,
@@ -567,7 +567,6 @@ export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   const room = ROOMS[roomId];
   const program = PROGRAMS[programId] || PROGRAMS["piano-solo"];
   const camDef = view?.cam || CAM;
-  const cam = K.makeCamera(camDef);
   const floorNear = Math.max(7, camDef.pos[2] + 2.5);
   const items = program.items().sort((a, b) => b.z - a.z);
   const people = items.filter((i) => i.person).map((i) => i.person);
@@ -575,6 +574,7 @@ export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   // A stage with only instruments on it (set-up before a percussion piece)
   // frames and focuses on the instruments instead.
   const framed = people.length ? people : items.map((i) => ({ x: i.x ?? 0, z: i.z }));
+  const cam = K.makeCamera(camDef);
   const box = bboxOf(framed, cam);
   const nearest = Math.min(...framed.map((p) => cam.dist(p.x, 1.2, p.z)));
   const farthest = Math.max(...framed.map((p) => cam.dist(p.x, 1.2, p.z)));

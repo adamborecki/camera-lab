@@ -65,7 +65,7 @@ Micro Four Thirds: equivalent = 2 × focal length. Prices are rough (Oct 2026); 
 
 The **Lens Shopping** station (Free play) puts the 12–60, 9–18 and Laowa 7.5 on the GH5 in Salmon. In
 the sim's (estimated) Salmon, the booth needs nothing wider than the 14–140; a camera in the center aisle
-~5 m from the stage needs ~24 mm for the choir; down front at the stage edge needs ~18 mm for the
+~5 m from the stage needs ~24 mm for the chamber orchestra; down front at the stage edge needs ~18 mm for the
 mariachi. So: wider only pays off if the GH5 is going to stand close — which is a question about where
 it goes, not about lenses.
 
@@ -74,9 +74,5 @@ Sources: [Panasonic 8–18 vs 7–14](https://mirrorlesscomparison.com/micro-fou
 
 ## Open questions for the instructor
 
-- Musco: the map is now 2 static wide, 5 conductor cam, 7 backstage, 8 PowerPoint, 1/3/4/6
-  close-ups (instructor, Oct 17) — but the gig checklist says "camera 3 is the static wide". Is
-  that an RP150 button number that differs from the ATEM input, or out of date? And which
-  operator runs which pair (1+3 and 4+6?).
 - RovoCam exposure settings in Salmon; the RovoControl + joystick workflow in detail (photos).
 - AX100 MANUAL button vs. PROGRAM AE; close-up photos of its side panel and LCD.

@@ -168,7 +168,7 @@ for (const [w, h, tag] of [
   await check(page, true, "booth: zoomed out");
   await widest();
   await check(page, true, "aisle: zoomed out");
-  await check(page, false, "aisle: 14–140 can't fit the choir");
+  await check(page, false, "aisle: 14–140 can't fit the orchestra");
   await lens("gh5-7-5");
   await check(page, false, "aisle: Laowa fits but is wider than needed");
   await lens("gh5-12-60");
