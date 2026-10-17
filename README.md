@@ -106,7 +106,7 @@ Not yet checked on the real gear — confirm before treating as instructions:
 - RovoCam: its exposure settings in Salmon (sim: F4 · 3 dB · 1/60 — unknown) and the iris range at tele.
 - Salmon's AWB result (`scene.awb` = 3800K A5 G2) encodes the instructor's observation that an AX100 at those numbers matches the RovoCam — not a measurement.
 - Each body's `colorBias` is illustrative, not measured.
-- Salmon's dimensions (booth ~19 m from the back wall, stage ~17 m wide, booth eye height 5 m) are estimated from photos, not measured. Lens Shopping's answers (booth: anything; aisle at 5 m: 24 mm or wider; down front: 18 mm or wider) depend on them — a tape measure from the booth window and the aisle to the stage would settle which lens is worth buying.
+- Salmon's geometry: length and width now follow the hall's floor plan (adamborecki/salmon `docs/FLOOR_PLAN.md`: 18.8 m from the back-of-house apex to the upstage wall, 16.6 m wide; the sim's camera is ~19 m from the upstage wall). Still estimated: the booth camera's height (sim 5 m), where the performers stand (sim 12–17 m from the booth), and the aisle and down-front spots in Lens Shopping. Its answers (booth: anything; aisle at 5 m: 24 mm or wider; down front: 18 mm or wider) depend on those.
 - Salmon livestream: the multiview layout beyond the booth photo, Camera 1 vs 2 assignment, and the Production Studio 4K → Mini Extreme ISO chain.
 
 ## Finish & Canvas

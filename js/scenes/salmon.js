@@ -15,7 +15,11 @@ import * as K from "./hall-kit.js";
 
 const CAM = { pos: [0, 5.0, 0], pitchDeg: 14, equivFocal: 32 };
 const BACK_Z = 19;
-const ROOM_X = 8.6;
+// Half-width at the upstage wall, and how much wider each side gets toward
+// the house (z = 6). Salmon's floor plan (adamborecki/salmon, docs/FLOOR_PLAN.md)
+// is 18.8 m from the back-of-house apex to the upstage wall and 16.6 m wide.
+const ROOM_X = 8.0;
+const SPLAY = 0.3;
 
 // ---------- the room ----------
 
@@ -29,7 +33,7 @@ function drawRoom(ctx, W, H, cam, opts) {
   K.poly(ctx, cam, [[-ROOM_X, 0, BACK_Z], [ROOM_X, 0, BACK_Z], [ROOM_X, 9.5, BACK_Z], [-ROOM_X, 9.5, BACK_Z]], wall);
   // side walls, splayed toward the house
   for (const s of [-1, 1]) {
-    K.poly(ctx, cam, [[s * ROOM_X, 0, BACK_Z], [s * (ROOM_X + 2.2), 0, 6], [s * (ROOM_X + 2.2), 9.5, 6], [s * ROOM_X, 9.5, BACK_Z]], dim ? "#a8946f" : "#e2d2b2");
+    K.poly(ctx, cam, [[s * ROOM_X, 0, BACK_Z], [s * (ROOM_X + SPLAY), 0, 6], [s * (ROOM_X + SPLAY), 9.5, 6], [s * ROOM_X, 9.5, BACK_Z]], dim ? "#a8946f" : "#e2d2b2");
   }
   // soft falloff of the downlights on the walls
   const [, topY] = cam.p(0, 9.5, BACK_Z);
@@ -59,14 +63,14 @@ function drawRoom(ctx, W, H, cam, opts) {
     for (let n = 0; n < 3; n++) {
       const z0 = BACK_Z - 2 - n * 3.6;
       const z1 = z0 - 2.6;
-      const xa = s * (ROOM_X + (2.2 * (BACK_Z - z0)) / (BACK_Z - 6));
-      const xb = s * (ROOM_X + (2.2 * (BACK_Z - z1)) / (BACK_Z - 6));
+      const xa = s * (ROOM_X + (SPLAY * (BACK_Z - z0)) / (BACK_Z - 6));
+      const xb = s * (ROOM_X + (SPLAY * (BACK_Z - z1)) / (BACK_Z - 6));
       K.poly(ctx, cam, [[xa, 3.4, z0], [xb, 3.4, z1], [xb, 7.75, z1], [xa, 7.75, z0]], dim ? "#a08b66" : "#d8c5a2", "#5a4632", 1.6);
     }
   }
   // wood wainscot with dark trim
   K.poly(ctx, cam, [[-ROOM_X, 0, BACK_Z - 0.01], [ROOM_X, 0, BACK_Z - 0.01], [ROOM_X, 1.15, BACK_Z - 0.01], [-ROOM_X, 1.15, BACK_Z - 0.01]], "#c27a35");
-  for (const s of [-1, 1]) K.poly(ctx, cam, [[s * ROOM_X, 0, BACK_Z], [s * (ROOM_X + 2.2), 0, 6], [s * (ROOM_X + 2.2), 1.15, 6], [s * ROOM_X, 1.15, BACK_Z]], "#b56f2e");
+  for (const s of [-1, 1]) K.poly(ctx, cam, [[s * ROOM_X, 0, BACK_Z], [s * (ROOM_X + SPLAY), 0, 6], [s * (ROOM_X + SPLAY), 1.15, 6], [s * ROOM_X, 1.15, BACK_Z]], "#b56f2e");
   // vertical grain hints
   const r = rng(5);
   ctx.globalAlpha = 0.18;
@@ -74,7 +78,7 @@ function drawRoom(ctx, W, H, cam, opts) {
   ctx.globalAlpha = 1;
   for (const y of [1.15, 1.22, 0.06]) {
     K.line(ctx, cam, [-ROOM_X, y, BACK_Z - 0.03], [ROOM_X, y, BACK_Z - 0.03], "#5a2412", 3);
-    for (const s of [-1, 1]) K.line(ctx, cam, [s * ROOM_X, y, BACK_Z - 0.03], [s * (ROOM_X + 2.2), y, 6], "#5a2412", 3);
+    for (const s of [-1, 1]) K.line(ctx, cam, [s * ROOM_X, y, BACK_Z - 0.03], [s * (ROOM_X + SPLAY), y, 6], "#5a2412", 3);
   }
   // ceiling clouds peeking in at the top of a wide shot
   ctx.fillStyle = "#9a6a3a";
@@ -94,7 +98,7 @@ function drawRoom(ctx, W, H, cam, opts) {
 function drawFloor(ctx, W, H, cam, opts) {
   const dim = opts.dim || 0;
   // cork floor
-  K.poly(ctx, cam, [[-ROOM_X - 2.2, 0, 6], [ROOM_X + 2.2, 0, 6], [ROOM_X, 0, BACK_Z], [-ROOM_X, 0, BACK_Z]], dim ? "#8e6a48" : "#c79a6c");
+  K.poly(ctx, cam, [[-ROOM_X - SPLAY, 0, 6], [ROOM_X + SPLAY, 0, 6], [ROOM_X, 0, BACK_Z], [-ROOM_X, 0, BACK_Z]], dim ? "#8e6a48" : "#c79a6c");
   // light stripes framing the performance area (two nested rectangles)
   const band = (x0, x1, z0, z1, w, col) => {
     K.poly(ctx, cam, [[x0, 0.002, z0], [x1, 0.002, z0], [x1, 0.002, z0 + w], [x0, 0.002, z0 + w]], col);
@@ -105,11 +109,11 @@ function drawFloor(ctx, W, H, cam, opts) {
   const light = dim ? "#b08a62" : "#e6c9a0";
   band(-7.6, 7.6, 8.6, 18.2, 0.5, light);
   band(-6.2, 6.2, 10.2, 17.0, 0.18, light);
-  K.poly(ctx, cam, [[-ROOM_X - 2.2, 0.002, 7.2], [ROOM_X + 2.2, 0.002, 7.2], [ROOM_X + 2.2, 0.002, 7.9], [-ROOM_X - 2.2, 0.002, 7.9]], light);
+  K.poly(ctx, cam, [[-ROOM_X - SPLAY, 0.002, 7.2], [ROOM_X + SPLAY, 0.002, 7.2], [ROOM_X + SPLAY, 0.002, 7.9], [-ROOM_X - SPLAY, 0.002, 7.9]], light);
   // pool of light on the stage (only on the floor)
   const [cx, cy] = cam.p(0, 0, 13);
   ctx.save();
-  K.poly(ctx, cam, [[-ROOM_X - 2.2, 0, 6], [ROOM_X + 2.2, 0, 6], [ROOM_X, 0, BACK_Z], [-ROOM_X, 0, BACK_Z]]);
+  K.poly(ctx, cam, [[-ROOM_X - SPLAY, 0, 6], [ROOM_X + SPLAY, 0, 6], [ROOM_X, 0, BACK_Z], [-ROOM_X, 0, BACK_Z]]);
   ctx.clip();
   ctx.fillStyle = rgrad(ctx, cx, cy, 20, 620, [
     [0, "rgba(255,225,180,0.22)"],
