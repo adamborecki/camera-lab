@@ -8,6 +8,8 @@ import { storageKey } from "./deploy-context.js";
 export const BUGS_KEY = "cameralab.bugs.v1";
 export const MAX_TEXT = 1000;
 export const ISSUES_URL = "https://github.com/adamborecki/camera-lab/issues/new";
+// The course's Repo Improvement form (the same link as REPO_IMPROVEMENT_FORM in mus248's feedback.js).
+export const REPO_IMPROVEMENT_FORM = "https://forms.gle/ee2ypjZo8VbhRVUT9";
 
 const oneLine = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 
