@@ -57,11 +57,11 @@ const sharp = (c, key) => {
 // Panasonic cameras' own, the same on the RP150 and the multiview.
 const MUSCO_START = { fps: 30, aperture: 5.6, gainDb: 0, shutter: 60, wb: 3200, wbMode: "indoor", focus: 22 };
 const MUSCO_POS = {
-  1: { label: "Camera 1 · flutes, house left", aim: [0.25, 0.68], focal: 120, angle: { shift: -1.4, aimDepth: 20 } },
-  2: { label: "Camera 2 · static wide", aim: [0.5, 0.6], focal: 52, readOnly: true },
-  3: { label: "Camera 3 · center, over the conductor", aim: [0.5, 0.6], focal: 70, angle: { shift: 0.2, aimDepth: 22 } },
-  4: { label: "Camera 4 · brass, house left", aim: [0.34, 0.58], focal: 110, angle: { shift: -1.8, aimDepth: 24 } },
-  6: { label: "Camera 6 · horns & percussion, house right", aim: [0.7, 0.6], focal: 100, angle: { shift: 1.6, aimDepth: 23 } },
+  1: { label: "Camera 1 · flutes, house left", aim: [0.25, 0.68], focal: 140, angle: { shift: -1.4, aimDepth: 20 } },
+  2: { label: "Camera 2 · static wide", aim: [0.5, 0.6], focal: 40, readOnly: true },
+  3: { label: "Camera 3 · center, over the conductor", aim: [0.5, 0.6], focal: 100, angle: { shift: 0.2, aimDepth: 22 } },
+  4: { label: "Camera 4 · brass, house left", aim: [0.34, 0.58], focal: 135, angle: { shift: -1.8, aimDepth: 24 } },
+  6: { label: "Camera 6 · horns & percussion, house right", aim: [0.7, 0.6], focal: 125, angle: { shift: 1.6, aimDepth: 23 } },
 };
 function MUSCO_RIGS(off = {}) {
   return Object.entries(MUSCO_POS).map(([id, p]) => ({
@@ -1040,7 +1040,7 @@ export const stations = [
     bodyControls: true,
     rigs: [
       { id: "3", label: "Camera 3 · center", camera: "ue150", start: { ...MUSCO_START, focal: 45 } },
-      { id: "2", label: "Camera 2 · static wide", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 52 } },
+      { id: "2", label: "Camera 2 · static wide", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 40 } },
     ],
     tools: { available: ["meter", "zebras", "hud"], on: ["meter"] },
     intro: "It's an hour before the Wind Symphony. Only the work lights are on.",
