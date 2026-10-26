@@ -2,7 +2,7 @@
 // (station, camera, scene, settings, browser). Saved for the Canvas export;
 // a copyable report and a prefilled GitHub issue are smaller extras.
 // Ported from Mixer Lab's bug button.
-import { MAX_TEXT, contextLine, issueUrl, reportText } from "../bugs.js";
+import { MAX_TEXT, REPO_IMPROVEMENT_FORM, contextLine, issueUrl, reportText } from "../bugs.js";
 
 export class BugView {
   // getContext(): { station, title, camera, scene, settings, url }
@@ -17,7 +17,7 @@ export class BugView {
         <textarea class="bug-text" rows="4" maxlength="${MAX_TEXT}" placeholder="I set the iris to F4.0 but the Check button said it wasn't…"></textarea></label>
       <button type="button" class="btn btn-start" data-bug-save>Save for my Canvas summary</button>
       <p class="bug-status" role="status" aria-live="polite"></p>
-      <p class="bug-extras">Also: <button type="button" class="linkish" data-bug-copy>Copy the report</button> · <button type="button" class="linkish" data-bug-github>Open a GitHub issue</button> <small>(needs a GitHub account; the issue is public)</small></p>
+      <p class="bug-extras">Also: <button type="button" class="linkish" data-bug-copy>Copy the report</button> · <a class="linkish" href="${REPO_IMPROVEMENT_FORM}" target="_blank" rel="noopener">Repo Improvement form</a> · <button type="button" class="linkish" data-bug-github>Open a GitHub issue</button> <small>(needs a GitHub account; the issue is public)</small></p>
     </div>`;
     this.$ = (s) => dialog.querySelector(s);
     dialog.addEventListener("click", (e) => {
