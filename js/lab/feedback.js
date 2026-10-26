@@ -13,10 +13,15 @@ import {
   formatFocal,
   gainOptions,
   renderedWhite,
+  colorOffset,
   colorMatch,
+  RB_GAIN_STEP,
+  WB_RANGE,
+  WB_AB_MIRED,
   blackMatch,
   effectiveWb,
 } from "../sim/camera-model.js";
+import { TOL } from "./tolerances.js";
 
 function gainLabel(camera, stops) {
   const opts = gainOptions(camera);
@@ -119,11 +124,15 @@ export const checks = {
       test: ({ settings, camera }) => ({
         pass: settings.gainStops <= maxStops,
         detail:
-          settings.gainStops <= maxStops ? `${gainLabel(camera, settings.gainStops)} — noise under control.` : `${gainLabel(camera, settings.gainStops)} is too noisy for this shot.`,
+          settings.gainStops > maxStops
+            ? `${gainLabel(camera, settings.gainStops)} is too noisy for this shot.`
+            : settings.gainStops > 3.01
+              ? `${gainLabel(camera, settings.gainStops)} — within the limit, but you'll see the noise.`
+              : `${gainLabel(camera, settings.gainStops)} — noise under control.`,
       }),
     };
   },
-  wbNear(kelvin, tol = 400) {
+  wbNear(kelvin, tol = TOL.wbNear) {
     return {
       label: `White balance matches the ${kelvin}K light (±${tol}K)`,
       test: ({ settings }) => {
@@ -135,13 +144,14 @@ export const checks = {
       },
     };
   },
-  inFocus(key) {
+  // `tip` is added when it fails (e.g. where to focus for two subjects).
+  inFocus(key, { tip = "" } = {}) {
     return {
       label: `Keep ${key} sharp`,
       test: ({ derived, scene }) => {
         const s = subject(scene, key);
         const ok = sharp(derived, s.depth);
-        return { pass: ok, detail: ok ? `${cap(s.label)} ${is(s)} sharp.` : `${cap(s.label)} ${is(s)} out of focus.` };
+        return { pass: ok, detail: ok ? `${cap(s.label)} ${is(s)} sharp.` : `${cap(s.label)} ${is(s)} out of focus.${tip ? ` ${tip}` : ""}` };
       },
     };
   },
@@ -199,31 +209,36 @@ export const checks = {
 // station); `rig` defaults to the one the student is controlling.
 
 const rigOf = (ctx, id) => (id ? ctx.rigs?.[id] : null) || { settings: ctx.settings, derived: ctx.derived, camera: ctx.camera, view: ctx.view };
-const rigName = (ctx, id) => ctx.rigs?.[id]?.def?.label || id || "your camera";
+// What feedback calls a camera: its short `name` ("the GH5", "Cam B"), not
+// the monitor caption with its position.
+const rigName = (ctx, id) => ctx.rigs?.[id]?.def?.name || ctx.rigs?.[id]?.def?.label || id || "your camera";
 const gainDbOf = (r) => gainOptions(r.camera).reduce((b, o) => (Math.abs(o.value - r.settings.gainStops) < Math.abs(b.value - r.settings.gainStops) ? o : b));
 
 Object.assign(checks, {
-  // Two cameras' whites look the same on the multiview.
-  colorMatches(refId, { rig, tol = 0.03 } = {}) {
+  // Two cameras' whites look the same on the multiview, judged in mired and
+  // G/M steps (TOL.colorMatch). A miss says which way, by how much, and what
+  // to dial: "≈3150K, or 1 step toward B".
+  colorMatches(refId, { rig, tol } = {}) {
     return {
+      rig,
       label: `Color matches ${refId}`,
       test: (ctx) => {
         const a = rigOf(ctx, refId);
         const b = rigOf(ctx, rig);
-        const m = colorMatch(renderedWhite(a.settings, a.camera, ctx.scene), renderedWhite(b.settings, b.camera, ctx.scene));
-        const ok = m.dist <= tol;
-        return {
-          pass: ok,
-          detail: ok
-            ? `Color matches ${rigName(ctx, refId)}.`
-            : `${cap(rigName(ctx, rig))} looks ${m.words.join(" and ") || "a little different"} than ${rigName(ctx, refId)}.`,
-        };
+        const t = tol ?? (b.camera.shading ? TOL.shadingMatch : TOL.colorMatch);
+        const o = colorOffset(a.settings, a.camera, b.settings, b.camera, ctx.scene);
+        const warmOff = Math.abs(o.mired) > t.mired;
+        const tintOff = Math.abs(o.gm) > t.gm;
+        if (!warmOff && !tintOff) return { pass: true, detail: `Color matches ${rigName(ctx, refId)}.` };
+        if (b.camera.shading && Math.abs(o.mired) <= 30) return { pass: false, detail: shadingAdvice(a, b, ctx.scene, cap(rigName(ctx, rig)), rigName(ctx, refId)) };
+        return { pass: false, detail: colorAdvice(o, b, warmOff, tintOff, cap(rigName(ctx, rig)), rigName(ctx, refId)) };
       },
     };
   },
   // …and the same brightness (on the performers, not the whole frame).
-  brightnessMatches(refId, { rig, tol = 0.34 } = {}) {
+  brightnessMatches(refId, { rig, tol = TOL.brightnessMatch } = {}) {
     return {
+      rig,
       label: `Brightness matches ${refId} (±⅓ stop)`,
       test: (ctx) => {
         const a = rigOf(ctx, refId).derived.exposureStops;
@@ -239,10 +254,11 @@ Object.assign(checks, {
   // Exposure judged on the subject, for one rig.
   rigExposure(lo, hi, { rig } = {}) {
     const base = checks.exposure(lo, hi);
-    return { label: base.label, test: (ctx) => base.test({ ...ctx, derived: rigOf(ctx, rig).derived }) };
+    return { rig, label: base.label, test: (ctx) => base.test({ ...ctx, derived: rigOf(ctx, rig).derived }) };
   },
   noAutoExposure({ rig } = {}) {
     return {
+      rig,
       label: "Iris, shutter and gain locked (no A)",
       test: (ctx) => {
         const s = rigOf(ctx, rig).settings;
@@ -257,6 +273,7 @@ Object.assign(checks, {
   },
   shutterIs(denom, { rig } = {}) {
     return {
+      rig,
       label: `Shutter 1/${denom}`,
       test: (ctx) => {
         const s = rigOf(ctx, rig).settings;
@@ -266,6 +283,7 @@ Object.assign(checks, {
   },
   maxGainDb(db, { rig } = {}) {
     return {
+      rig,
       label: `Gain ${db} dB or less`,
       test: (ctx) => {
         const r = rigOf(ctx, rig);
@@ -275,8 +293,9 @@ Object.assign(checks, {
       },
     };
   },
-  whiteBalance(kelvin, { rig, tol = 100, shift = false } = {}) {
+  whiteBalance(kelvin, { rig, tol = TOL.whiteBalance, shift = false } = {}) {
     return {
+      rig,
       label: `White balance ${kelvin}K${shift ? "" : ", no shift"}`,
       test: (ctx) => {
         const r = rigOf(ctx, rig);
@@ -296,6 +315,7 @@ Object.assign(checks, {
   },
   ndOff({ rig } = {}) {
     return {
+      rig,
       label: "ND off (indoors)",
       test: (ctx) => {
         const s = rigOf(ctx, rig).settings;
@@ -305,6 +325,7 @@ Object.assign(checks, {
   },
   autofocusOn({ rig } = {}) {
     return {
+      rig,
       label: "Autofocus on",
       test: (ctx) => {
         const s = rigOf(ctx, rig).settings;
@@ -314,6 +335,7 @@ Object.assign(checks, {
   },
   recording({ rig } = {}) {
     return {
+      rig,
       label: "Recording",
       test: (ctx) => {
         const r = ctx.rigs?.[rig || ctx.activeRig];
@@ -327,6 +349,7 @@ Object.assign(checks, {
   // of it — or the lens all the way in.
   framing({ rig, minFill = 0.62 } = {}) {
     return {
+      rig,
       label: "Framed tight, with room to bow",
       test: (ctx) => {
         const r = rigOf(ctx, rig);
@@ -342,8 +365,8 @@ Object.assign(checks, {
         const inside = b.x0 >= fx0 + pad && b.x1 <= fx1 - pad && b.y0 >= fy0 + pad && b.y1 <= fy1 - pad;
         const fill = Math.max((b.x1 - b.x0) / (fx1 - fx0), (b.y1 - b.y0) / (fy1 - fy0));
         const maxed = r.derived.frameZoom >= (ctx.scene.maxFrameZoom || 3) * 0.97 || r.settings.focal >= (r.camera.lens?.tele || Infinity) * 0.97;
-        if (!inside) return { pass: false, detail: "Too tight — someone (standing for a bow) would be cut off. Zoom out a little." };
-        if (fill < minFill && !maxed) return { pass: false, detail: `Lots of empty space — the group only fills ${Math.round(fill * 100)}% of the frame. Zoom in until it's snug, leaving room to stand.` };
+        if (!inside) return { pass: false, detail: "Too tight — someone (standing for a bow) or an instrument would be cut off. Zoom out a little." };
+        if (fill < minFill && !maxed) return { pass: false, detail: `Lots of empty space — the group only fills ${Math.round(fill * 100)}% of the frame (snug is about ${Math.round(minFill * 100)}% or more). Zoom in, leaving room to stand.` };
         return { pass: true, detail: "Snug, with room for bows." };
       },
     };
@@ -353,8 +376,9 @@ Object.assign(checks, {
 // ---------- shading (Musco PTZ cameras on the RP150) ----------
 Object.assign(checks, {
   // Blacks the same as the reference camera (pedestal).
-  blacksMatch(refId, { rig, tol = 0.004 } = {}) {
+  blacksMatch(refId, { rig, tol = TOL.blacksMatch } = {}) {
     return {
+      rig,
       label: `Blacks match ${refId}`,
       test: (ctx) => {
         const m = blackMatch(rigOf(ctx, refId).settings, rigOf(ctx, rig).settings);
@@ -382,6 +406,7 @@ Object.assign(checks, {
   // Musco's house defaults on a UE150: F5.6 · 0 dB · A/3200K · shading at 0.
   muscoHouse({ rig } = {}) {
     return {
+      rig,
       label: "House defaults (F5.6 · 0 dB · A/3200K · R/B gain & pedestal 0)",
       test: (ctx) => {
         const s = rigOf(ctx, rig).settings;
@@ -397,6 +422,56 @@ Object.assign(checks, {
   },
 });
 
+// What to say when two cameras' colors don't match: the direction(s) that are
+// off, roughly how far, and what to dial on this body. Kelvin and A–B advice
+// only for bodies whose white balance the student sets in kelvin; G–M only
+// for bodies with a shift; the Musco PTZs are shaded with R/B gain instead.
+function colorAdvice(o, r, warmOff, tintOff, name, refName) {
+  const shift = r.camera.wbShift;
+  const kelvinBody = !r.camera.shading;
+  const out = [];
+  if (warmOff) {
+    // Graded in mired; said in words (students learn kelvin, not mired).
+    const much = Math.abs(o.mired) < 10 ? "a little " : Math.abs(o.mired) < 30 ? "noticeably " : "a lot ";
+    let t = `${name} looks ${much}${o.mired > 0 ? "warmer (more amber)" : "cooler (more blue)"} than ${refName}`;
+    if (kelvinBody) {
+      const k = Math.round(1e6 / (1e6 / o.kelvin + o.mired) / WB_RANGE.step) * WB_RANGE.step;
+      const steps = Math.round(Math.abs(o.mired) / WB_AB_MIRED);
+      const auto = r.settings.wbMode === "auto";
+      t += `: try ${auto ? "Color Temp " : ""}≈${k}K${shift && steps && steps <= shift.ab && !auto ? `, or ${steps} step${steps > 1 ? "s" : ""} toward ${o.mired > 0 ? "B" : "A"} on the shift` : ""}`;
+    } else t += ": check its white balance button (house: A/3200K)";
+    out.push(t + ".");
+  }
+  // Way off in kelvin, the tint estimate is noise: fix the kelvin first.
+  if (tintOff && Math.abs(o.mired) <= 30) {
+    const steps = Math.max(1, Math.round(Math.abs(o.gm)));
+    const dir = o.gm > 0 ? "more magenta" : "greener";
+    const fix = shift ? `: about ${steps} step${steps > 1 ? "s" : ""} toward ${o.gm > 0 ? "G" : "M"} on the shift` : "";
+    out.push(warmOff ? `It's also ${dir}${fix}.` : `${name} looks ${dir} than ${refName}${fix}.`);
+  }
+  return out.join(" ");
+}
+
+// A Musco PTZ that's close in kelvin: R/B GAIN moves ln R/G and ln B/G
+// directly, so name the knob(s) and which way. Not the value: finding it on
+// the monitors is the exercise.
+function shadingAdvice(a, b, scene, name, refName) {
+  const wa = renderedWhite(a.settings, a.camera, scene);
+  const wb = renderedWhite(b.settings, b.camera, scene);
+  const to = (cur, d) => Math.round((Math.exp(Math.log(1 + cur * RB_GAIN_STEP) + d) - 1) / RB_GAIN_STEP);
+  const r = to(b.settings.rGain || 0, wa.rg - wb.rg);
+  const bl = to(b.settings.bGain || 0, wa.bg - wb.bg);
+  const dir = (to, cur) => Math.abs(to - cur) >= 3 && (to < cur ? "down" : "up");
+  const knobs = [
+    [dir(r, b.settings.rGain || 0), "R GAIN"],
+    [dir(bl, b.settings.bGain || 0), "B GAIN"],
+  ]
+    .filter(([d]) => d)
+    .map(([d, n]) => `${n} ${d}`);
+  const m = colorMatch(wa, wb);
+  return `${name} looks ${m.words.join(" and ") || "a little different"} than ${refName}${knobs.length ? `: ${knobs.join(", ")}` : ""}.`;
+}
+
 const is = (s) => (s.plural ? "are" : "is");
 
 export function cap(s) {
@@ -404,5 +479,7 @@ export function cap(s) {
 }
 
 export function runChecks(list, ctx) {
-  return list.map((c) => ({ label: c.label, ...c.test(ctx) }));
+  // Per-camera checks say which camera ("B: Recording"), so a two-camera
+  // receipt doesn't list the same label twice.
+  return list.map((c) => ({ label: c.rig ? `${c.rig}: ${c.label}` : c.label, ...c.test(ctx) }));
 }

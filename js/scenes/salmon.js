@@ -165,9 +165,14 @@ const P = (o) => ({ z: o.z, x: o.x, person: o, draw: (ctx, cam) => K.person(ctx,
 const T = (z, x, draw) => ({ z, x, draw });
 const STEINWAY = { x: -1.4, z: 13.4 };
 
+// A played grand has to be in the static wide too, not just its pianist:
+// `frame` is its footprint (K.grandPiano's case, keyboard to tail, front
+// leg to spine, up to the raised lid) for the framing check.
+const grandFrame = (x, z, len = 2.1, lid = true) => ({ x0: x, x1: x + len, z0: z - 0.6, z1: z + 0.85, h: lid ? 1.5 : 1.0 });
+
 function pianoWithPlayer(px, pz, seed, opts = {}) {
   return [
-    T(pz + 0.05, px, (ctx, cam) => K.grandPiano(ctx, cam, { x: px, z: pz, dir: 1, ...opts })),
+    { ...T(pz + 0.05, px, (ctx, cam) => K.grandPiano(ctx, cam, { x: px, z: pz, dir: 1, ...opts })), frame: grandFrame(px, pz, opts.len) },
     T(pz - 0.6, px - 0.55, (ctx, cam) => K.bench(ctx, cam, px - 0.55, pz + 0.05)),
     P({ x: px - 0.55, z: pz - 0.05, pose: "piano", facing: "right", look: L(seed, opts.look || {}) }),
   ];
@@ -198,7 +203,7 @@ export const PROGRAMS = {
   "two-pianos": {
     title: "Piano duo (two grands)",
     items: () => [
-      T(14.6, 0, (ctx, cam) => K.grandPiano(ctx, cam, { x: -0.2, z: 14.6, dir: 1 })),
+      { ...T(14.6, 0, (ctx, cam) => K.grandPiano(ctx, cam, { x: -0.2, z: 14.6, dir: 1 })), frame: grandFrame(-0.2, 14.6) },
       P({ x: -0.6, z: 14.4, pose: "piano", facing: "right", look: L(41) }),
       ...pianoWithPlayer(-1.5, 13.0, 42),
       P({ x: -1.6, z: 13.5, pose: "sit", look: L(43, { top: "#5a5d66" }) }),
@@ -486,6 +491,22 @@ function bboxOf(people, cam) {
   return { x0, x1, y0, y1 };
 }
 
+// …widened to take in the played instruments' footprints (`frame`).
+function withInstruments(box, items, cam) {
+  let { x0, x1, y0, y1 } = box;
+  for (const f of items.map((i) => i.frame).filter(Boolean))
+    for (const x of [f.x0, f.x1])
+      for (const z of [f.z0, f.z1])
+        for (const y of [0, f.h]) {
+          const [u, v] = cam.uv(x, y, z);
+          x0 = Math.min(x0, u);
+          x1 = Math.max(x1, u);
+          y0 = Math.min(y0, v);
+          y1 = Math.max(y1, v);
+        }
+  return { x0, x1, y0, y1 };
+}
+
 // A generic proscenium auditorium — Memorial Hall-ish, or any rented hall
 // you carry the Standard Gear Kit into: a dark house, black masking, warm
 // light only on the stage. Average metering hates this room: most of the
@@ -577,7 +598,7 @@ export function makeHallScene(roomId, programId = "piano-solo", view = null) {
   // frames and focuses on the instruments instead.
   const framed = people.length ? people : items.map((i) => ({ x: i.x ?? 0, z: i.z }));
   const cam = K.makeCamera(camDef);
-  const box = bboxOf(framed, cam);
+  const box = withInstruments(bboxOf(framed, cam), items, cam);
   const nearest = Math.min(...framed.map((p) => cam.dist(p.x, 1.2, p.z)));
   const farthest = Math.max(...framed.map((p) => cam.dist(p.x, 1.2, p.z)));
 

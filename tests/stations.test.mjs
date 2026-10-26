@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { stations, SECTIONS } from "../data/stations.js";
 import { allCameras, getCamera } from "../data/cameras.js";
 import { scenes, getScene } from "../js/scenes/index.js";
-import { apertureOptions, gainOptions, ndOptions, shutterOptions, focalRange, renderedWhite, colorMatch } from "../js/sim/camera-model.js";
+import { apertureOptions, gainOptions, ndOptions, shutterOptions, focalRange } from "../js/sim/camera-model.js";
 import { checks } from "../js/lab/feedback.js";
 import { rig, ctxFor, allPass } from "./helpers.mjs";
 
@@ -105,16 +105,12 @@ test("GH5 can be matched to the AX100 with its own white-balance controls", () =
   const ref = s.rigs.find((d) => d.reference);
   const g = s.rigs.find((d) => !d.reference);
   const A = rig(s.scene, ref.camera, ref.start, ref);
+  const colorOk = (G) => s.criteria[0].test(ctxFor({ A, G }, "G")).pass;
   // Color first (kelvin + shift), then exposure with the GH5's own iris/ISO.
   let found = null;
-  const sc = getScene(s.scene);
-  const white = (r) => renderedWhite(r.settings, r.camera, sc);
   for (let wb = 2800; wb <= 4000 && !found; wb += 50)
     for (let ab = -9; ab <= 9 && !found; ab++)
-      for (let gm = -9; gm <= 9 && !found; gm++) {
-        const G = rig(s.scene, "gh5", { ...g.start, wb, wbAB: ab, wbGM: gm }, g);
-        if (colorMatch(white(A), white(G)).dist <= 0.03) found = { wb, wbAB: ab, wbGM: gm };
-      }
+      for (let gm = -9; gm <= 9 && !found; gm++) if (colorOk(rig(s.scene, "gh5", { ...g.start, wb, wbAB: ab, wbGM: gm }, g))) found = { wb, wbAB: ab, wbGM: gm };
   let passed = false;
   if (found)
     for (const aperture of apertureOptions(getCamera("gh5")).map((o) => o.value))
@@ -125,8 +121,51 @@ test("GH5 can be matched to the AX100 with its own white-balance controls", () =
   assert.ok(passed, "GH5 color matches but no exposure passes");
   assert.ok(found, "no GH5 setting matches");
   // …and the bare 3200K isn't already a match, or there's nothing to learn.
-  const G0 = rig(s.scene, "gh5", { ...g.start, wb: 3200 }, g);
-  assert.ok(colorMatch(renderedWhite(A.settings, A.camera, sc), renderedWhite(G0.settings, G0.camera, sc)).dist > 0.03);
+  assert.ok(!colorOk(rig(s.scene, "gh5", { ...g.start, wb: 3200 }, g)), "GH5 at the AX100's 3200K already matches");
+});
+
+// Color tolerances are mired + G/M steps (js/lab/tolerances.js). These pin
+// the boundaries students actually hit, from the Oct 2026 receipts.
+test("color matching: GH5 window, the RovoCam's green, and a hint that says what to dial", () => {
+  const s = stations.find((x) => x.id === "match-gh5");
+  const ref = s.rigs.find((d) => d.reference);
+  const g = s.rigs.find((d) => !d.reference);
+  const A = rig(s.scene, ref.camera, ref.start, ref);
+  const at = (over) => s.criteria[0].test(ctxFor({ A, G: rig(s.scene, "gh5", { ...g.start, ...over }, g) }, "G"));
+  for (const wb of [3100, 3150]) assert.ok(at({ wb }).pass, `GH5 ${wb}K should match`);
+  for (const [over, why] of [[{ wb: 3200, wbAB: -1 }, "3200K B1"], [{ wb: 2950, wbAB: 4 }, "2950K A4"]]) assert.ok(at(over).pass, `${why} should match`);
+  for (const wb of [3000, 3050, 3200, 3250]) assert.ok(!at({ wb }).pass, `GH5 ${wb}K shouldn't match`);
+  assert.match(at({ wb: 3000 }).detail, /cooler.*≈3150K/);
+  assert.match(at({ wb: 3200 }).detail, /warmer.*≈3150K.*toward B/);
+
+  const r = stations.find((x) => x.id === "match-rovocam");
+  const R = r.rigs.find((d) => d.id === "R");
+  const X = r.rigs.find((d) => d.id === "X");
+  const RR = rig(r.scene, R.camera, R.start, R);
+  const ax = (over) => r.criteria[0].test(ctxFor({ R: RR, X: rig(r.scene, "ax100", { ...X.start, wbMode: "temp", ...over }, X) }, "X"));
+  assert.ok(ax({ wb: 3800, wbAB: 5, wbGM: 2 }).pass, "Salmon's house numbers match");
+  assert.ok(!ax({ wb: 3800, wbAB: 5, wbGM: 0 }).pass, "the RovoCam's green needs the G shift");
+  assert.match(ax({ wb: 3800, wbAB: 5, wbGM: 0 }).detail, /more magenta.*toward G/);
+  for (let wb = 2000; wb <= 10000; wb += 50) assert.ok(!ax({ wb }).pass, `kelvin alone shouldn't match the RovoCam (${wb}K)`);
+});
+
+test("Musco: every camera left in a mess fails color or blacks until it's shaded", () => {
+  const s = stations.find((x) => x.id === "musco-shade-all");
+  const rigs = Object.fromEntries(s.rigs.map((d) => [d.id, rig(s.scene, d.camera, d.start, d)]));
+  for (const id of ["3", "4", "6"]) assert.ok(!checks.colorMatches("2", { rig: id }).test(ctxFor(rigs, id)).pass, `camera ${id} color`);
+  assert.ok(!checks.blacksMatch("2", { rig: "1" }).test(ctxFor(rigs, "1")).pass, "camera 1 blacks");
+  assert.match(checks.colorMatches("2", { rig: "3" }).test(ctxFor(rigs, "3")).detail, /R GAIN down/);
+  assert.match(checks.colorMatches("2", { rig: "6" }).test(ctxFor(rigs, "6")).detail, /B GAIN up/);
+});
+
+// A student's half-cut piano passed: the box held the pianist only. A played
+// grand is part of the static wide now (salmon.js `frame`).
+test("framing: a played grand counts, not just the pianist", () => {
+  const s = stations.find((x) => x.id === "framing-static-wide");
+  const b = getScene("salmon-piano-solo").framing;
+  assert.ok(b.x1 - b.x0 > 0.15, `piano-solo box is only ${(b.x1 - b.x0).toFixed(3)} wide — the piano isn't in it`);
+  const sc = getScene("salmon-piano-solo");
+  assert.ok(checks.framing().test(ctxFor({ x: rig(sc, "ax100", { ...s.start, focal: 95 }) }, "x")).pass, "a frame with the whole piano passes");
 });
 
 test("the framing station can be framed for every program it uses", () => {

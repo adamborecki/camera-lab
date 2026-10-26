@@ -8,11 +8,17 @@ import { getState, setReflection, markComplete } from "../js/progress.js";
 import { stations, SECTIONS } from "../data/stations.js";
 import { BugLog } from "../js/bugs.js";
 import { PREVIEW } from "../js/deploy-context.js";
+import { appVersion } from "../js/app-version.js";
 
 const sectionLabel = Object.fromEntries(SECTIONS);
 
 const STATION_ID = "finish";
-const RECEIPT_SCHEMA = "camera-lab-receipt-v2";
+// v3 (Oct 2026): appVersion; per-station firstOpenedAt/completedAt and an
+// always-present failedChecks; challenge checkedAt/lastCheckedAt; module
+// stations typed "module"; stillFailing says which camera ("B: Recording");
+// whiteBalance is always "3200K [shift]" with the preset in wbPreset; a
+// repeated Check on unchanged settings isn't a new attempt.
+const RECEIPT_SCHEMA = "camera-lab-receipt-v3";
 const QUESTION_1 = "Describe one setting change that fixed one problem but created another.";
 const QUESTION_2 = "If you were filming a real concert tomorrow, what would you set first, and why?";
 const QUESTION_3 = "Optional: anything in Camera Lab that was confusing, broken, or didn't match the real camera?";
@@ -76,13 +82,17 @@ export function mount(container) {
         id: s.id,
         title: s.title,
         section: sectionLabel[s.group] || s.group,
-        type: s.mode,
+        type: s.mode || "module",
         opened: !!p.opened,
         completed: !!p.completed,
+        ...(p.firstOpenedAt ? { firstOpenedAt: p.firstOpenedAt } : {}),
+        ...(p.completedAt ? { completedAt: p.completedAt } : {}),
         interactions: p.interactions || 0,
         activeMinutes: toMinutes(p.activeMs || 0),
-        ...(p.steps ? { steps: p.steps.map((x, i) => ({ step: i + 1, failedChecks: x?.fails || 0, seconds: x?.seconds || 0 })) } : {}),
-        ...(p.failedChecks ? { failedChecks: p.failedChecks } : {}),
+        ...(s.mode === "guided" || p.steps
+          ? { steps: Array.from(p.steps || [], (x, i) => ({ step: i + 1, failedChecks: x?.fails || 0, seconds: x?.seconds || 0 })) }
+          : {}),
+        failedChecks: p.failedChecks || 0,
         ...(p.hints ? { hintsOpened: p.hints } : {}),
         ...(p.resets ? { resets: p.resets } : {}),
       };
@@ -92,7 +102,16 @@ export function mount(container) {
       .map((s) => {
         const c = st.challenges?.[s.id];
         return c
-          ? { id: s.id, title: s.title, result: c.passed ? "Passed" : "Not passed yet", attempts: c.attempts, finalSettings: c.settings, ...(c.failed?.length ? { stillFailing: c.failed } : {}) }
+          ? {
+              id: s.id,
+              title: s.title,
+              result: c.passed ? "Passed" : "Not passed yet",
+              attempts: c.attempts,
+              ...(c.at ? { checkedAt: c.at } : {}),
+              ...(c.lastCheckedAt ? { lastCheckedAt: c.lastCheckedAt } : {}),
+              finalSettings: c.settings,
+              ...(c.failed?.length ? { stillFailing: c.failed } : {}),
+            }
           : { id: s.id, title: s.title, result: "Not attempted" };
       });
     const opened = stationReports.filter((s) => s.opened).length;
@@ -122,6 +141,7 @@ export function mount(container) {
     }
     const payload = {
       schema: RECEIPT_SCHEMA,
+      appVersion: await appVersion(),
       sessionId: st.sessionId,
       startedAt: st.startedAt,
       generatedAt: new Date().toISOString(),
@@ -134,7 +154,7 @@ export function mount(container) {
       reflection1: { question: QUESTION_1, answer: r1.value.trim() },
       reflection2: { question: QUESTION_2, answer: r2.value.trim() },
       appFeedback: r3.value.trim(),
-      bugReports: new BugLog().list().map(({ text, at, station, camera, scene, settings, browser }) => ({ text, at, station, camera, scene, settings, browser })),
+      bugReports: new BugLog().list().map(({ text, at, station, camera, scene, settings, browser, appVersion }) => ({ text, at, station, camera, scene, settings, browser, appVersion })),
       ...(PREVIEW ? { preview: PREVIEW } : {}),
       challenges,
       stations: stationReports,

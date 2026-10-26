@@ -336,6 +336,29 @@ export function blackMatch(sa, sb) {
   return { worst, d, words };
 }
 
+// How far camera B's white balance has to move to match camera A, in B's
+// own terms: `mired` (+ = B looks warmer than A, so B needs more mired, i.e.
+// a lower kelvin or a step toward B) and `gm` (+ = B looks more magenta, so
+// it needs steps toward G). Solved from a local linearization of B's render,
+// so it works for any body and any WB mode (auto and presets included).
+// `kelvin`/`ab`/`gm0` are what B is applying now.
+export function colorOffset(sa, ca, sb, cb, scene) {
+  const target = renderedWhite(sa, ca, scene);
+  const wb = effectiveWb(sb, scene);
+  const base = { ...sb, wbMode: "temp", wb: wb.kelvin, wbAB: wb.ab, wbGM: wb.gm };
+  const W = (s) => renderedWhite(s, cb, scene);
+  const w0 = W(base);
+  const m0 = 1e6 / wb.kelvin;
+  const pM = W({ ...base, wb: 1e6 / (m0 + 1) });
+  const pG = W({ ...base, wbGM: wb.gm + 1 });
+  const j = [pM.rg - w0.rg, pG.rg - w0.rg, pM.bg - w0.bg, pG.bg - w0.bg];
+  const d = [target.rg - w0.rg, target.bg - w0.bg];
+  const det = j[0] * j[3] - j[1] * j[2];
+  const mired = (d[0] * j[3] - j[1] * d[1]) / det;
+  const gm = (j[0] * d[1] - j[2] * d[0]) / det;
+  return { mired, gm, kelvin: wb.kelvin, ab: wb.ab, gm0: wb.gm };
+}
+
 export function colorMatch(a, b) {
   const dr = b.rg - a.rg;
   const db = b.bg - a.bg;

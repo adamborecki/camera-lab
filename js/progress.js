@@ -90,14 +90,18 @@ export function markComplete(id) {
 }
 
 // Keeps the best attempt: a pass is never overwritten by a later fail.
-export function recordChallenge(id, result) {
+// `repeat`: the same settings were already checked, so it isn't a new attempt.
+// `at` is when the kept result was checked; `lastCheckedAt` the latest Check.
+export function recordChallenge(id, { repeat = false, ...result }) {
   state.challenges = state.challenges || {};
   const prev = state.challenges[id];
-  const attempts = (prev?.attempts || 0) + 1;
+  const attempts = (prev?.attempts || 0) + (repeat && prev ? 0 : 1);
+  const now = new Date().toISOString();
   if (!prev || result.passed || !prev.passed) {
-    state.challenges[id] = { ...result, attempts, at: new Date().toISOString() };
+    state.challenges[id] = { ...result, attempts, at: now, lastCheckedAt: now };
   } else {
     prev.attempts = attempts;
+    prev.lastCheckedAt = now;
   }
   save();
 }

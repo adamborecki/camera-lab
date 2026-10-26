@@ -163,6 +163,15 @@ export class Ax100Panel {
   }
 
   pickWb(mode) {
+    // Stations where cameras have to cut together: auto WB drifts on its own
+    // and the other cameras don't follow, so the button explains instead.
+    if (mode === "auto" && this.host.noAutoWb) {
+      this.wbNote = "We don't use auto white balance on a gig: it drifts between pieces, and the other cameras won't drift with it. Set Color Temp.";
+      this.renderWbMenu();
+      this.host.say(this.wbNote);
+      return;
+    }
+    this.wbNote = "";
     const s = this.host.get();
     if (mode === "onepush") {
       // Aim at something white, press: the camera measures the light.
@@ -246,6 +255,7 @@ export class Ax100Panel {
     this.wbMenuEl.innerHTML = `
       <p class="ax-menu-title">White Balance</p>
       <div class="ax-menu-row">${WB_MODES.map((m) => `<button type="button" class="hw-btn${m.id === mode ? " on" : ""}" data-wbmode="${m.id}">${m.label}</button>`).join("")}</div>
+      ${this.wbNote ? `<p class="ax-menu-note" role="status">${this.wbNote}</p>` : ""}
       <p class="ax-menu-title">WB shift (fine trim) — move the dot</p>
       <div class="ax-pad"></div>
       <div class="ax-menu-row"><button type="button" class="hw-btn" data-wb>Done</button></div>`;

@@ -3,6 +3,7 @@
 // a copyable report and a prefilled GitHub issue are smaller extras.
 // Ported from Mixer Lab's bug button.
 import { MAX_TEXT, REPO_IMPROVEMENT_FORM, contextLine, issueUrl, reportText } from "../bugs.js";
+import { appVersionNow } from "../app-version.js";
 
 export class BugView {
   // getContext(): { station, title, camera, scene, settings, url }
@@ -39,7 +40,7 @@ export class BugView {
 
   report() {
     const ctx = this.ctx || this.getContext();
-    return { ...ctx, text: this.$(".bug-text").value, at: new Date().toISOString(), browser: browserName() };
+    return { ...ctx, text: this.$(".bug-text").value, at: new Date().toISOString(), browser: browserName(), appVersion: appVersionNow() };
   }
 
   save() {

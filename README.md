@@ -75,7 +75,7 @@ COURSE CONTENT   data/stations.js, data/cameras.js
 
 ### Camera bodies with their real controls
 
-`bodyControls: true` on a station swaps the generic dials for a replica of the body. For Musco's UE150s it's the **Panasonic AW-RP150 controller** (`js/ui/rp150-panel.js`, after the booth photo): camera selection buttons that switch which camera you control, the screen (iris/zoom/focus bars, R/B gain and pedestal values, gain, color temp), A/3200K · B/5600K · ATW · AWB, knobs for R/B GAIN, R/B PED, M.PED, IRIS (+ AUTO) and gain on F1, the zoom lever and FOCUS AUTO. A rig marked `readOnly` (Camera 2, the static wide) can be selected to read, never changed. For an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen in the body's order — IRIS · GAIN · SHUTTER — (tap to select, tap again to hand back to auto), the side buttons in the same order, the MANUAL ring, the MANUAL button on the body and on the screen (all three to auto — the trap), WB menu with Color Temp and the WB shift as a square you drag a dot across (`js/ui/wb-pad.js`: A–B across, G–M up and down), ND switch, AF/MF, zoom lever. Other bodies use the generic dials for now.
+`bodyControls: true` on a station swaps the generic dials for a replica of the body. For Musco's UE150s it's the **Panasonic AW-RP150 controller** (`js/ui/rp150-panel.js`, after the booth photo): camera selection buttons that switch which camera you control, the screen (iris/zoom/focus bars, R/B gain and pedestal values, gain, color temp), A/3200K · B/5600K · ATW · AWB, knobs for R/B GAIN, R/B PED, M.PED, IRIS (+ AUTO) and gain on F1, the zoom lever and FOCUS AUTO. A rig marked `readOnly` (Camera 2, the static wide) can be selected to read, never changed. For an AX100 (`js/ui/ax100-panel.js`): values on the touchscreen in the body's order — IRIS · GAIN · SHUTTER — (tap to select, tap again to hand back to auto), the side buttons in the same order, the MANUAL ring, the MANUAL button on the body and on the screen (all three to auto — the trap), WB menu with Color Temp and the WB shift as a square you drag a dot across (`js/ui/wb-pad.js`: A–B across, G–M up and down), ND switch, AF/MF, zoom lever; `noAutoWb: true` on a station (the matching and gig stations) makes its Auto WB button explain that we don't use auto white balance instead of switching. Other bodies use the generic dials for now.
 
 ## Adding things
 
@@ -114,7 +114,7 @@ Not yet checked on the real gear — confirm before treating as instructions:
 
 ## Finish & Canvas
 
-The Finish page produces a readable summary plus a `camera-lab-receipt-v2` JSON block (per-station engagement; for guided steps, failed Checks and seconds per step; hints and resets; challenge results with every camera's final settings; reflections; optional app feedback; bug reports from the 🐞 button; SHA-256 checksum), in the same shape as Sound Lab's export. It's formative: the point is to see where students got stuck, and what's broken.
+The Finish page produces a readable summary plus a `camera-lab-receipt-v3` JSON block (the app version it came from, from `version.json`, which `tools/build-pages.sh` writes at deploy; per-station engagement with first-opened and completed times; for guided steps, failed Checks and seconds per step; hints and resets; challenge results with every camera's final settings; reflections; optional app feedback; bug reports from the 🐞 button; SHA-256 checksum), in the same shape as Sound Lab's export. It's formative: the point is to see where students got stuck, and what's broken.
 
 ## Branch previews
 

@@ -55,6 +55,10 @@ not published).
 - AX100: pressing a selected value again ("double press") makes it auto; MANUAL sends iris,
   shutter and gain to auto and auto exposure overexposes a dark hall.
 - The GH5 only has the 14–140 (28 mm eq. at its widest). A wider MFT lens is being considered.
+- Focus (Oct 26): shooting from far away, AF most of the time, and make sure everything is in
+  focus. MF when there will be a blackout: AF can go blurry when the lights come back.
+- Auto white balance (Oct 26): not used when cameras cut together. The AX100 matching and gig
+  stations (`noAutoWb`) answer the AWB button with a short note instead of switching.
 - Musco (from the MUS 248 Musco Gig Checklist): Panasonic UE150 PTZs on an RP150 controller;
   house defaults F5.6 · 0 dB · A/3200K · R/B gain 0 · R/B pedestal 0; set exposure under the
   brightest cue. Multiview map (instructor, Oct 17): **2 static wide — never touch it**, 5

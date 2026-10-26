@@ -155,7 +155,10 @@ function settingsSummary(ctx) {
     aperture: `f/${st.aperture}`,
     gain: g.label,
     nd: nd ? nd.label : "OFF",
-    whiteBalance: wbMode === "auto" ? "auto" : `${wbMode && wbMode !== "onepush" ? wbMode + " " : ""}${kelvin}K${shift ? " " + shift : ""}`,
+    // The kelvin the camera applies, always the same shape ("3200K A5 G2");
+    // which button got it there is its own field.
+    whiteBalance: wbMode === "auto" ? "auto" : `${kelvin}K${shift ? " " + shift : ""}`,
+    ...(wbMode && wbMode !== "auto" ? { wbPreset: wbMode } : {}),
     focus: st.auto?.focus ? "AF" : formatDistance(st.focus),
     ...(autos.length ? { onAuto: autos.join(", ") } : {}),
   };
@@ -187,6 +190,7 @@ function challenge(api) {
     </div>`;
   const results = api.el.querySelector(".results");
   const btn = api.el.querySelector(".submit-btn");
+  let lastChecked = null;
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     const stats = await api.freshStats();
@@ -199,10 +203,18 @@ function challenge(api) {
         .map((r) => `<li class="${r.pass ? "pass" : "fail"}"><span aria-hidden="true">${r.pass ? "✓" : "✗"}</span> <strong>${r.pass ? "OK" : "Problem"}:</strong> ${r.detail || r.label}</li>`)
         .join("")}</ul>
       ${passed ? `<p class="result-note">${s.passNote ? `${s.passNote} ` : ""}Your settings are saved for the Finish page.${s.passNote ? "" : " Other combinations would also have worked — try another camera!"}</p>` : ""}`;
+    // An attempt is a Check on settings not already checked: pressing it
+    // again with nothing changed doesn't count twice. (The first Check counts
+    // even untouched: reading what's wrong is a reasonable first move.)
+    const settings = rigSummaries(ctx);
+    const sig = JSON.stringify(settings);
+    const repeat = sig === lastChecked;
+    lastChecked = sig;
     recordChallenge(s.id, {
       title: s.title,
       passed,
-      settings: rigSummaries(ctx),
+      repeat,
+      settings,
       failed: res.filter((r) => !r.pass).map((r) => r.label),
       minutesOpen: Math.round((Date.now() - opened) / 6000) / 10,
     });

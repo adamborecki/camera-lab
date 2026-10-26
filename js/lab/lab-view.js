@@ -342,6 +342,7 @@ export function mountLab(container, station) {
         note: (k) => activity.onChange(k),
         say: (t) => (feedEl.textContent = t),
         oneShotWhite: () => keyLight(scene).kelvin,
+        noAutoWb: !!station.noAutoWb,
         lcdEl: viewport,
         panelEl: controlsEl,
       });

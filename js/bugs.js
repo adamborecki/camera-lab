@@ -60,6 +60,7 @@ export function reportText(r) {
     `What happened: ${oneLine(r.text)}`,
     r.settings ? `Settings: ${r.settings}` : "",
     r.browser ? `Browser: ${r.browser}` : "",
+    r.appVersion ? `App version: ${r.appVersion}` : "",
     r.url ? `Page: ${r.url}` : "",
   ]
     .filter(Boolean)

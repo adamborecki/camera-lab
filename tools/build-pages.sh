@@ -15,6 +15,9 @@ MAX="${MAX_PREVIEWS:-15}"
 rm -rf "$OUT"
 mkdir -p "$OUT/branch"
 git archive "$ROOT_REF" | tar -x -C "$OUT"
+# Which commit each copy is: receipts and bug reports carry it (js/app-version.js).
+stamp() { git log -1 --format='{"commit":"%h","date":"%cI"}' "$1" > "$2/version.json"; }
+stamp "$ROOT_REF" "$OUT"
 # Reference photos of real recitals stay in the repo for whoever builds
 # scenes, but aren't published on the site (docs/reference/README.md).
 rm -rf "$OUT/docs/reference"
@@ -36,6 +39,7 @@ while IFS=$'\t' read -r branch date; do
   if (( count >= MAX )); then echo "skip (over $MAX previews): $branch"; continue; fi
   mkdir -p "$OUT/branch/$slug"
   git archive "$REF_NS/$branch" | tar -x -C "$OUT/branch/$slug"
+  stamp "$REF_NS/$branch" "$OUT/branch/$slug"
   rm -rf "$OUT/branch/$slug/docs/reference"
   # Previews stay out of search results.
   [[ -f "$OUT/branch/$slug/index.html" ]] && perl -pi -e 's#<head>#<head>\n  <meta name="robots" content="noindex" />#' "$OUT/branch/$slug/index.html"

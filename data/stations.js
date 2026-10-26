@@ -67,6 +67,7 @@ function MUSCO_RIGS(off = {}) {
   return Object.entries(MUSCO_POS).map(([id, p]) => ({
     id,
     label: p.label,
+    name: `Camera ${id}`,
     camera: "ue150",
     aim: p.aim,
     angle: p.angle,
@@ -585,7 +586,16 @@ export const stations = [
     tools: { available: ["meter", "dof", "magnify", "hud"], on: ["hud"] },
     brief: "Refresher from Homework 2. Singer and drummer both need to be sharp, and the shot still has to be exposed. How hard that is depends on the sensor you got.",
     goals: ["Singer sharp", "Drummer sharp", "Good exposure", "Gain no higher than ISO 3200 / 30 dB"],
-    criteria: [checks.inFocus("singer"), checks.inFocus("drummer"), checks.exposure(-0.7, 0.7), checks.maxIso(3200)],
+    criteria: [
+      // Students focused on the singer (2.4–2.5 m); every pass focused at
+      // 3.2–3.4 m. Full tip once, so it isn't printed twice when both miss.
+      checks.inFocus("singer", { tip: "Focus between them, not on the singer." }),
+      checks.inFocus("drummer", { tip: "Focus <em>between</em> them, about a third of the way back from the singer: depth of field reaches further behind the focus point than in front of it." }),
+      checks.exposure(-0.7, 0.7),
+      checks.maxIso(3200),
+    ],
+    passNote:
+      "Deep depth of field costs light. Stopping down far enough for both meant a lot of gain — around 24 dB on the AX100, ISO 3200 on the GH5: allowed, but you can see the noise. A smaller sensor gets there more cheaply (the G50 passes at about f/2.5 and 11 dB). On a real gig the fixes are more light, or choosing which one stays sharp.",
   },
   {
     id: "ax100-out-of-bag",
@@ -602,10 +612,13 @@ export const stations = [
     intro: "These are the AX100's real controls: tap a value on the touchscreen (or the matching side button), then turn the <strong>MANUAL ring</strong>.",
     steps: [
       {
-        text: "This AX100 just came out of the bag on full auto — see the <strong>A</strong> next to IRIS, SHUTTER and GAIN. On the Meter, the white needle judges the performers; the <strong>blue</strong> line is the camera's own meter. Let auto settle for a second, turn on <strong>Zebras</strong>, then Check.",
+        text: "This AX100 just came out of the bag on full auto — see the <strong>A</strong> next to IRIS, SHUTTER and GAIN. On the Meter, the white needle judges the performers; the <strong>blue</strong> line is the camera's own meter. Let auto settle for a second, turn on <strong>Zebras</strong> (an exposure tool: stripes on anything about to blow out), then Check.",
         when: (c) => c.touchedKeys.has("tool:zebras"),
         notYet: "Turn on Zebras (under the picture) and look at the singer.",
-        done: "Stripes on the performers: blown out. Yet the camera's meter says it's fine — it averages the <em>whole frame</em>, and this hall is mostly dark, so it brightens until the average looks gray. That's why concert cameras never run on auto.",
+        done: (c) =>
+          ["aperture", "shutter", "gainStops"].some((k) => c.settings.auto?.[k])
+            ? "Stripes on the performers: blown out. Yet the camera's meter says it's fine — it averages the <em>whole frame</em>, and this hall is mostly dark, so it brightens until the average looks gray. That's why concert cameras never run on auto."
+            : "You've already taken exposure off auto, so the stripes may be gone. On full auto they're all over the performers: the camera's meter averages the <em>whole frame</em>, this hall is mostly dark, so it brightens until the average looks gray. That's why concert cameras never run on auto.",
       },
       {
         text: "Take IRIS off auto: tap <strong>IRIS</strong> on the screen (or press the IRIS button on the side). The A goes away and the value freezes.",
@@ -655,7 +668,7 @@ export const stations = [
         text: "Last: make sure autofocus is on (<strong>AF/MF</strong>), so the stage stays sharp without anyone touching the camera.",
         when: (c) => !!c.settings.auto?.focus,
         notYet: "The screen shows MF. Press AF/MF.",
-        done: "House-ready: manual F-stop, gain and shutter, 3200K, AF. That's the AX100 checklist.",
+        done: "House-ready: manual F-stop, gain and shutter, 3200K, AF. That's the AX100 checklist. AF is the default for a wide from far away. The exception: if the show has a blackout, focus, then switch to MF — AF can hunt when the lights come back.",
       },
     ],
   },
@@ -758,11 +771,13 @@ export const stations = [
     mode: "challenge",
     scene: "auditorium-chamber-orchestra",
     bodyControls: true,
+    noAutoWb: true,
     rigs: [
-      { id: "A", label: "Cam A · center wide", camera: "ax100", reference: true, start: { fps: 30, aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, focal: 36, auto: { focus: true } } },
+      { id: "A", label: "Cam A · center wide", name: "Cam A", camera: "ax100", reference: true, start: { fps: 30, aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, focal: 36, auto: { focus: true } } },
       {
         id: "B",
         label: "Cam B · backup, house left",
+        name: "Cam B",
         camera: "ax100",
         angle: { shift: -0.8 },
         aim: [0.45, 0.55],
@@ -791,10 +806,11 @@ export const stations = [
     mode: "challenge",
     scene: "auditorium-voice-strings",
     rigs: [
-      { id: "A", label: "AX100 · center wide", camera: "ax100", reference: true, start: { fps: 30, aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, focal: 36, auto: { focus: true } } },
+      { id: "A", label: "AX100", name: "the AX100", camera: "ax100", reference: true, start: { fps: 30, aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, focal: 36, auto: { focus: true } } },
       {
         id: "G",
-        label: "GH5 · wider, house right",
+        label: "GH5",
+        name: "the GH5",
         camera: "gh5",
         angle: { shift: 0.8 },
         aim: [0.55, 0.55],
@@ -817,17 +833,20 @@ export const stations = [
     mode: "challenge",
     scene: "salmon-violin-piano",
     bodyControls: true,
+    noAutoWb: true,
     rigs: [
       {
         id: "R",
-        label: "Camera 2 · RovoCam static wide",
+        label: "RovoCam · Camera 2",
+        name: "the RovoCam",
         camera: "rovocam",
         reference: true,
         start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wbMode: "auto", focal: 34, auto: { focus: true } },
       },
       {
         id: "X",
-        label: "AX100 · backup wide, booth",
+        label: "AX100",
+        name: "the AX100",
         camera: "ax100",
         angle: { shift: 0.3 },
         start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wb: 3200, focal: 36, auto: { focus: true } },
@@ -857,16 +876,19 @@ export const stations = [
     mode: "challenge",
     scene: "auditorium-choir",
     bodyControls: true,
+    noAutoWb: true,
     rigs: [
       {
         id: "A",
         label: "Cam A · center wide",
+        name: "Cam A",
         camera: "ax100",
         start: { fps: 30, aperture: 2.8, gainDb: 15, shutter: 60, wbMode: "auto", focal: 32, auto: { aperture: true, shutter: true, gainStops: true, focus: true } },
       },
       {
         id: "B",
         label: "Cam B · backup, house left",
+        name: "Cam B",
         camera: "ax100",
         angle: { shift: -0.9 },
         aim: [0.42, 0.52],
@@ -879,7 +901,7 @@ export const stations = [
       "Both: performers correctly exposed, gain 9 dB or less",
       "Both: 1/60, iris/shutter/gain locked",
       "Both: 3200K, no shift; ND off; AF on",
-      "B matches A",
+      "B matches A: same color, same brightness",
       "A framed tight, with room to bow",
       "Both recording",
     ],
@@ -898,6 +920,7 @@ export const stations = [
       checks.autofocusOn({ rig: "A" }),
       checks.autofocusOn({ rig: "B" }),
       checks.colorMatches("A", { rig: "B" }),
+      checks.brightnessMatches("A", { rig: "B" }),
       checks.framing({ rig: "A" }),
       checks.recording({ rig: "A" }),
       checks.recording({ rig: "B" }),
@@ -919,9 +942,10 @@ export const stations = [
     mode: "challenge",
     scene: "salmon-choir",
     bodyControls: true,
+    noAutoWb: true,
     rigs: [
-      { id: "R", label: "Camera 2 · RovoCam static wide", camera: "rovocam", reference: true, start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wbMode: "auto", focal: 34, auto: { focus: true } } },
-      { id: "X", label: "AX100 · backup wide, booth", camera: "ax100", angle: { shift: 0.3 }, start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wb: 5600, wbMode: "outdoor", focal: 36, auto: { focus: true } } },
+      { id: "R", label: "RovoCam · Camera 2", name: "the RovoCam", camera: "rovocam", reference: true, start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wbMode: "auto", focal: 34, auto: { focus: true } } },
+      { id: "X", label: "AX100", name: "the AX100", camera: "ax100", angle: { shift: 0.3 }, start: { fps: 30, aperture: 4, gainDb: 3, shutter: 60, wb: 5600, wbMode: "outdoor", focal: 36, auto: { focus: true } } },
     ],
     tools: { available: ["meter", "hud"], on: ["hud"] },
     brief: "Refresher from Homework 3. Someone brought this AX100 back from an outdoor shoot. It's the backup wide in Salmon tonight — make it cut with the RovoCam.",
@@ -938,10 +962,12 @@ export const stations = [
     mode: "challenge",
     scene: "auditorium-piano-solo",
     bodyControls: true,
+    noAutoWb: true,
     rigs: [
       {
         id: "A",
         label: "AX100",
+        name: "the AX100",
         camera: "ax100",
         start: { fps: 30, aperture: 2.8, gainDb: 12, shutter: 60, wbMode: "auto", focal: 50, auto: { aperture: true, shutter: true, gainStops: true, focus: true } },
       },
@@ -1039,8 +1065,8 @@ export const stations = [
     scene: "musco-preshow",
     bodyControls: true,
     rigs: [
-      { id: "3", label: "Camera 3 · center", camera: "ue150", start: { ...MUSCO_START, focal: 45 } },
-      { id: "2", label: "Camera 2 · static wide", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 40 } },
+      { id: "3", label: "Camera 3 · center", name: "Camera 3", camera: "ue150", start: { ...MUSCO_START, focal: 45 } },
+      { id: "2", label: "Camera 2 · static wide", name: "Camera 2", camera: "ue150", readOnly: true, start: { ...MUSCO_START, focal: 40 } },
     ],
     tools: { available: ["meter", "zebras", "hud"], on: ["meter"] },
     intro: "It's an hour before the Wind Symphony. Only the work lights are on.",
