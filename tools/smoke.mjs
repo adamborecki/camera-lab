@@ -129,6 +129,24 @@ for (const [w, h, tag] of [
   await page.click(".submit-btn");
   await page.waitForTimeout(400);
   if (!(await page.locator(".result-head.pass").isVisible())) failures.push(`musco shade-all: ${await page.locator(".results").innerText()}`);
+  // Which Button: opens on Camera 4 (finished); a knob turned there fails it
+  await open(page, "musco-which-button");
+  if (!(await page.locator('.rp-cam.on[data-cam="4"]').isVisible())) failures.push("musco which-button: should open with button 4 lit");
+  await knob("IRIS").locator('[data-dir="-1"]').click();
+  await page.click(".submit-btn");
+  await page.waitForTimeout(400);
+  if (!/Camera 4 was changed/.test(await page.locator(".results").innerText())) failures.push("musco which-button: turning Camera 4 should fail");
+  // Looks Off: whichever camera was picked, house defaults everywhere pass
+  await open(page, "musco-looks-off");
+  await page.evaluate(() => {
+    for (const i of [0, 2, 3, 4]) {
+      cameraLab.rig(i);
+      for (const [k, v] of Object.entries({ aperture: 5.6, gainStops: 0, rGain: 0, bGain: 0, mPed: 0 })) cameraLab.set(k, v);
+    }
+  });
+  await page.click(".submit-btn");
+  await page.waitForTimeout(400);
+  if (!(await page.locator(".result-head.pass").isVisible())) failures.push(`musco looks-off: ${await page.locator(".results").innerText()}`);
   await page.close();
 }
 

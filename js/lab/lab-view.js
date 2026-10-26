@@ -184,7 +184,10 @@ export function mountLab(container, station) {
   // A warm-up can hand out a different body each time it's opened
   // (cameraPool), so the same drill is practiced on whatever's in the bag.
   const pooled = station.cameraPool ? station.cameraPool[Math.floor(Math.random() * station.cameraPool.length)] : null;
-  const rigDefs = station.rigs || [{ id: "main", camera: pooled || station.camera || "lab", start: station.start }];
+  // A multi-camera challenge can likewise leave a different camera wrong
+  // each time (faultPool: one { rigId: start overrides } is picked).
+  const fault = station.faultPool ? station.faultPool[Math.floor(Math.random() * station.faultPool.length)] : {};
+  const rigDefs = station.rigs?.map((d) => (fault[d.id] ? { ...d, start: { ...d.start, ...fault[d.id] } } : d)) || [{ id: "main", camera: pooled || station.camera || "lab", start: station.start }];
   const rigs = rigDefs.map((def, i) => ({
     def,
     id: def.id || `cam${i + 1}`,
@@ -199,7 +202,9 @@ export function mountLab(container, station) {
     recording: false,
     recStart: 0,
   }));
-  let active = Math.max(0, rigs.findIndex((r) => !r.def.reference));
+  // startRig: the camera the controls are on when the station opens (the
+  // Musco trap station leaves them on one you've already finished).
+  let active = Math.max(0, station.startRig ? rigs.findIndex((r) => r.id === station.startRig) : rigs.findIndex((r) => !r.def.reference));
   // The active rig's state, mirrored into plain variables the rest of this
   // file (and every narration helper) reads.
   let camera = rigs[active].camera;

@@ -932,7 +932,8 @@ export const stations = [
   // One controller, many cameras: read the multiview, pick a camera on the
   // RP150, read its screen, and shade every PTZ to match the static wide
   // under the brightest cue. Camera numbers follow the instructor's multiview
-  // map; positions on stage are illustrative (README).
+  // map; positions on stage are illustrative (README). Warm-ups review HW3
+  // (Salmon numbers, AX100 off auto) and HW2 (ND).
   {
     id: "warmup-salmon-numbers",
     title: "Warm-up: The Salmon Numbers",
@@ -976,6 +977,31 @@ export const stations = [
     brief: "Refresher from Homework 3. Full auto, dark hall, solo pianist. Take it off auto and expose the performer properly — fast.",
     goals: ["Performer correctly exposed", "Iris, shutter, gain locked", "1/60, 9 dB or less", "3200K, no shift"],
     criteria: [checks.rigExposure(-0.6, 0.6, { rig: "A" }), checks.noAutoExposure({ rig: "A" }), checks.shutterIs(60, { rig: "A" }), checks.maxGainDb(9, { rig: "A" }), checks.whiteBalance(3200, { rig: "A" })],
+  },
+  {
+    id: "warmup-nd",
+    title: "Warm-up: Fixed It With the Shutter",
+    purpose: "Refresher — ND on a random body. Smooth motion and a soft background, in full sun.",
+    group: "hw4",
+    accent: "#9BE564",
+    mode: "challenge",
+    scene: "park",
+    cameraPool: ["ax100", "gh5", "lab", "ff"],
+    start: { fps: 30, shutter: 2000, aperture: 2.8, iso: 100, gainDb: 0, nd: 0, focus: 3, wb: 5600 },
+    controls: ["aperture", "shutter", "iso", "nd", "focus"],
+    tools: { available: ["meter", "histogram", "zebras", "dof", "hud"], on: ["hud"] },
+    brief: "Refresher from Homework 2. Full sun, and the client wants the person sharp against soft trees. The last operator got the brightness right by turning the shutter up to 1/2000 — so at 30p every movement looks choppy. Fix the motion without losing the soft background or the exposure. A different camera each time you open this.",
+    goals: ["Natural motion at 30p", "Person sharp", "Trees soft", "Good exposure"],
+    criteria: [
+      checks.shutterAngle(120, 250),
+      checks.inFocus("person"),
+      checks.blurred("trees", 5.5),
+      checks.exposure(-0.7, 0.7, {
+        bright: "Slowing the shutter let in about five stops more light. Closing the iris would sharpen the trees — add <strong>ND</strong> instead: it cuts light and changes nothing else.",
+        dark: "Built-in ND can come in big steps. If the ND that keeps the trees soft leaves the picture a little dark, make up the difference with a little gain.",
+      }),
+    ],
+    passNote: "1/2000 to 1/60 is five stops more light, and ND takes them back. The AX100's ND switch jumps 2, 4 or 6 stops, so it usually lands with a little gain on top; the GH5 has no built-in ND, so it needs a filter screwed onto the lens. Same job, different hardware.",
   },
   {
     id: "musco-multiview",
@@ -1085,6 +1111,51 @@ export const stations = [
         done: "Blown out the moment the real lights came up — and the extra gain was noise for nothing. That's why the checklist says to ask for concert lighting, <strong>including the brightest cue</strong>, before you set anything: the house defaults are made for it.",
       },
     ],
+  },
+  {
+    id: "musco-which-button",
+    title: "Musco: Which Button Is Lit?",
+    purpose: "Two cameras left to shade, and the controller is still on the last one you finished.",
+    group: "hw4",
+    accent: "#FF9F7C",
+    mode: "challenge",
+    scene: "musco-concert",
+    bodyControls: true,
+    startRig: "4",
+    rigs: MUSCO_RIGS({
+      1: { aperture: 4 },
+      6: { rGain: 30 },
+    }),
+    tools: { available: ["meter", "waveform", "hud"], on: [] },
+    brief: "The brightest cue is up. You've just shaded Cameras 3 and 4, and they match Camera 2, the static wide. Cameras 1 and 6 still need it. Match them to Camera 2 without disturbing the three that are already right.",
+    goals: ["Cameras 1 and 6: color, brightness and blacks match Camera 2", "Cameras 3 and 4 as you left them", "Camera 2 untouched"],
+    criteria: [
+      ...["1", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
+      ...["3", "4"].map((id) => checks.untouched(id, { why: "was changed, and it was already right. Look at which camera button is lit before you turn a knob." })),
+      checks.untouched("2"),
+    ],
+    passNote: "Every time you pick up the controller, check which button is lit first. A knob turned on the wrong camera spoils a shot that was right, and if that camera is on Program, everyone watching sees it happen.",
+  },
+  {
+    id: "musco-looks-off",
+    title: "Musco: One of Them Looks Off",
+    purpose: "Nobody tells you which camera. Find the one that doesn't match — a different one each time.",
+    group: "hw4",
+    accent: "#C9B8FF",
+    mode: "challenge",
+    scene: "musco-concert",
+    bodyControls: true,
+    rigs: MUSCO_RIGS(),
+    // One camera, one small fault: blacks, color or brightness.
+    faultPool: [{ 1: { mPed: 8 } }, { 3: { bGain: 30 } }, { 4: { aperture: 4.5 } }, { 6: { rGain: 25 } }],
+    tools: { available: ["meter", "waveform", "hud"], on: [] },
+    brief: "Ten minutes to downbeat, brightest cue up. The person switching cuts around the multiview and says, \"One of the close-ups looks off.\" That's all you get. Find it, fix it, and leave the rest alone. (A different camera each time you open this.)",
+    goals: ["Cameras 1, 3, 4, 6: color, brightness and blacks match Camera 2", "Camera 2 untouched"],
+    criteria: [
+      ...["1", "3", "4", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
+      checks.untouched("2"),
+    ],
+    passNote: "Two ways to find it, and a good operator uses both: compare each monitor with Camera 2 (that's what the multiview is for), and read each camera's screen for anything off the house defaults.",
   },
   {
     id: "musco-shade-all",

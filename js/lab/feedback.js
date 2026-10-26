@@ -389,8 +389,9 @@ Object.assign(checks, {
       },
     };
   },
-  // The static wide is the reference: nobody changes it.
-  untouched(rigId) {
+  // The static wide is the reference: nobody changes it. `why` replaces the
+  // static-wide reason for any other camera that has to be left alone.
+  untouched(rigId, { why = "(the static wide) was changed — it's the safe shot; never touch it." } = {}) {
     const keys = ["aperture", "gainStops", "shutter", "wb", "wbMode", "rGain", "bGain", "rPed", "bPed", "mPed", "focal"];
     return {
       label: `Camera ${rigId} untouched`,
@@ -399,7 +400,7 @@ Object.assign(checks, {
         const start = r?.start;
         if (!r || !start) return { pass: true, detail: "" };
         const changed = keys.filter((k) => (typeof start[k] === "number" ? Math.abs(start[k] - r.settings[k]) > 1e-6 : start[k] !== r.settings[k]));
-        return { pass: !changed.length, detail: changed.length ? `Camera ${rigId} (the static wide) was changed — it's the safe shot; never touch it.` : `Camera ${rigId} untouched.` };
+        return { pass: !changed.length, detail: changed.length ? `Camera ${rigId} ${why}` : `Camera ${rigId} untouched.` };
       },
     };
   },

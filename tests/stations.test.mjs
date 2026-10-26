@@ -76,6 +76,8 @@ const ANSWERS = {
   "warmup-salmon-numbers": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbMode: "temp", wbAB: 5, wbGM: 2, auto: { focus: true } } },
   "warmup-lock-it-down": { A: { aperture: 2.8, gainDb: 6, shutter: 60, wb: 3200, wbMode: "temp", auto: { focus: true } } },
   "musco-shade-all": { 1: MUSCO_HOUSE, 3: MUSCO_HOUSE, 4: MUSCO_HOUSE, 6: MUSCO_HOUSE },
+  "musco-which-button": { 1: MUSCO_HOUSE, 6: MUSCO_HOUSE },
+  "musco-looks-off": { 1: MUSCO_HOUSE, 3: MUSCO_HOUSE, 4: MUSCO_HOUSE, 6: MUSCO_HOUSE },
   "match-two-ax100": { B: { aperture: 2.8, gainDb: 3, shutter: 60, wb: 3200, wbMode: "temp", nd: 0, auto: { focus: true } } },
   "match-rovocam": { X: { aperture: 4, gainDb: 3, shutter: 60, wb: 3800, wbAB: 5, wbGM: 2, auto: { focus: true } } },
   "sgk-gig": {
@@ -156,6 +158,43 @@ test("Musco: every camera left in a mess fails color or blacks until it's shaded
   assert.ok(!checks.blacksMatch("2", { rig: "1" }).test(ctxFor(rigs, "1")).pass, "camera 1 blacks");
   assert.match(checks.colorMatches("2", { rig: "3" }).test(ctxFor(rigs, "3")).detail, /R GAIN down/);
   assert.match(checks.colorMatches("2", { rig: "6" }).test(ctxFor(rigs, "6")).detail, /B GAIN up/);
+});
+
+test("Musco Which Button: the controls start on a finished camera, and turning it fails", () => {
+  const s = stations.find((x) => x.id === "musco-which-button");
+  assert.equal(s.startRig, "4");
+  assert.ok(s.rigs.some((d) => d.id === s.startRig && !d.readOnly), "starts on a camera the knobs can change");
+  const rigs = Object.fromEntries(s.rigs.map((d) => [d.id, rig(s.scene, d.camera, { ...d.start, ...(["1", "6"].includes(d.id) ? MUSCO_HOUSE : {}) }, d)]));
+  assert.deepEqual(allPass(s.criteria, ctxFor(rigs, "4")), []);
+  // The trap: Camera 1's fix (iris to F5.6) dialed into Camera 4 instead.
+  const four = s.rigs.find((d) => d.id === "4");
+  rigs["4"] = { ...rig(s.scene, "ue150", { ...four.start, aperture: 8 }, four), start: rigs["4"].start };
+  assert.match(allPass(s.criteria, ctxFor(rigs, "4")).map((f) => f.detail).join(" "), /Camera 4 was changed.*button is lit/);
+});
+
+test("Musco Looks Off: every fault in the pool fails a check at the start and passes at house defaults", () => {
+  const s = stations.find((x) => x.id === "musco-looks-off");
+  assert.ok(s.faultPool.length > 1);
+  for (const fault of s.faultPool) {
+    const [id] = Object.keys(fault);
+    const defs = s.rigs.map((d) => (fault[d.id] ? { ...d, start: { ...d.start, ...fault[d.id] } } : d));
+    const rigs = Object.fromEntries(defs.map((d) => [d.id, rig(s.scene, d.camera, d.start, d)]));
+    const failed = allPass(s.criteria, ctxFor(rigs, id));
+    assert.equal(failed.length, 1, `fault ${JSON.stringify(fault)}: ${failed.map((f) => f.detail)}`);
+    assert.match(failed[0].detail, new RegExp(`Camera ${id}`));
+    const fixed = { ...rigs, [id]: rig(s.scene, "ue150", { ...defs.find((d) => d.id === id).start, ...MUSCO_HOUSE }, defs.find((d) => d.id === id)) };
+    assert.deepEqual(allPass(s.criteria, ctxFor(fixed, id)), []);
+  }
+});
+
+test("ND warm-up: the shutter fix starts out correctly exposed but choppy, on every body", () => {
+  const s = stations.find((x) => x.id === "warmup-nd");
+  for (const cam of s.cameraPool) {
+    const r = rig(s.scene, cam, s.start);
+    const failed = allPass(s.criteria, ctxFor({ main: r }, "main")).map((f) => f.label);
+    assert.ok(Math.abs(r.derived.exposureStops) <= 0.7, `${cam}: start exposure ${r.derived.exposureStops}`);
+    assert.ok(failed.some((l) => /motion|shutter/i.test(l)), `${cam}: the shutter should fail at the start (${failed})`);
+  }
 });
 
 // A student's half-cut piano passed: the box held the pianist only. A played
