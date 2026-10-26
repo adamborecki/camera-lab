@@ -17,7 +17,7 @@ practice space for the camera half of that — the simulator equivalent of reps.
 | 1 | live | exposure triangle, aperture, shutter, ISO/gain, frame rate | — |
 | 2 | live | white balance, ND, focus/DOF, sensor size, challenges | HW1 |
 | 3 | built | the AX100's real controls and traps; framing a static wide; matching AX100↔AX100, GH5→AX100, AX100→RovoCam; Salmon livestream (program/preview/On Air); two-camera SGK gig | 3 warm-ups on a random body |
-| 4 | built (preview branch `claude/hw4-musco`) | Musco: the multiview and the RP150's camera buttons, reading its screen against the house defaults, R/B gain vs gain, the brightest cue, shading four PTZs to match the static wide | warm-ups: Salmon numbers, AX100 off auto |
+| 4 | built | Musco: the multiview and the RP150's camera buttons, reading its screen against the house defaults, R/B gain vs gain, the brightest cue, shading four PTZs to match the static wide | warm-ups: Salmon numbers, AX100 off auto |
 | 5 | planned | PTZ operation: joystick (inverted tilt), zoom rocker + speed, focus (AUTO on → off); shot sizes; taking a call ("camera 2, the trumpet solo") | framing, shading |
 | 6 | planned | switching: program/preview, CUT/AUTO, calling shots, static wide as the safe shot, ISO vs program recordings | PTZ, matching |
 | 7 | planned | capstone: a simulated Musco concert as switcher and as camera operator | everything |
