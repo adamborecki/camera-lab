@@ -22,6 +22,7 @@ import {
   effectiveWb,
 } from "../sim/camera-model.js";
 import { TOL } from "./tolerances.js";
+import { shotReport, shotOk, shotAdvice, SHOT_WORDS } from "./shots.js";
 
 function gainLabel(camera, stops) {
   const opts = gainOptions(camera);
@@ -392,7 +393,7 @@ Object.assign(checks, {
   // The static wide is the reference: nobody changes it. `why` replaces the
   // static-wide reason for any other camera that has to be left alone.
   untouched(rigId, { why = "(the static wide) was changed — it's the safe shot; never touch it." } = {}) {
-    const keys = ["aperture", "gainStops", "shutter", "wb", "wbMode", "rGain", "bGain", "rPed", "bPed", "mPed", "focal"];
+    const keys = ["aperture", "gainStops", "shutter", "wb", "wbMode", "rGain", "bGain", "rPed", "bPed", "mPed", "focal", "aimU", "aimV"];
     return {
       label: `Camera ${rigId} untouched`,
       test: (ctx) => {
@@ -472,6 +473,33 @@ function shadingAdvice(a, b, scene, name, refName) {
   const m = colorMatch(wa, wb);
   return `${name} looks ${m.words.join(" and ") || "a little different"} than ${refName}${knobs.length ? `: ${knobs.join(", ")}` : ""}.`;
 }
+
+// ---------- PTZ operation (Musco calls) ----------
+Object.assign(checks, {
+  // "Camera 4, the trumpets": on the target, the right size, centered, sharp.
+  shot(targetId, { rig, kind } = {}) {
+    return {
+      rig,
+      label: `On ${targetId}`,
+      test: (ctx) => {
+        const r = rigOf(ctx, rig);
+        const rep = shotReport(r, ctx.scene, targetId);
+        const ok = shotOk(rep, kind);
+        return { pass: ok, detail: ok ? `${cap(rigName(ctx, rig))}: ${SHOT_WORDS[kind || rep.kind]} ${rep.target.label}, sharp.` : shotAdvice(rep, rigName(ctx, rig), kind) };
+      },
+    };
+  },
+  focusLocked({ rig } = {}) {
+    return {
+      rig,
+      label: "Focus AUTO off",
+      test: (ctx) => {
+        const on = !!rigOf(ctx, rig).settings.auto?.focus;
+        return { pass: !on, detail: on ? `${cap(rigName(ctx, rig))} is still on FOCUS AUTO — it'll hunt when someone walks through the shot or the lights change. Turn AUTO off once it's sharp.` : "Focus locked." };
+      },
+    };
+  },
+});
 
 const is = (s) => (s.plural ? "are" : "is");
 

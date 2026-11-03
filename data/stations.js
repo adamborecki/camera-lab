@@ -27,6 +27,7 @@
 //             step began (see exposure-triangle below), for steps that care
 //             which dial was tried, not just where it ended up.
 import { checks } from "../js/lab/feedback.js";
+import { shotReport, framedOk, shotOk, shotAdvice } from "../js/lab/shots.js";
 import { effectiveWb, frameCenter } from "../js/sim/camera-model.js";
 import { getCamera } from "./cameras.js";
 
@@ -38,6 +39,7 @@ export const SECTIONS = [
   ["go-further", "Homework 2 — Go Further"],
   ["hw3", "Homework 3 — Standard Gear Kit & Salmon"],
   ["hw4", "Homework 4 — Musco: Many Cameras, One Look"],
+  ["hw5", "Homework 5 — Musco: Run a Camera"],
   ["play", "Free play"],
   ["finish", "Finish"],
 ];
@@ -63,7 +65,7 @@ const MUSCO_POS = {
   4: { label: "Camera 4 · brass, house left", aim: [0.34, 0.58], focal: 135, angle: { shift: -1.8, aimDepth: 24 } },
   6: { label: "Camera 6 · horns & percussion, house right", aim: [0.7, 0.6], focal: 125, angle: { shift: 1.6, aimDepth: 23 } },
 };
-function MUSCO_RIGS(off = {}) {
+function MUSCO_RIGS(off = {}, { ptz = false } = {}) {
   return Object.entries(MUSCO_POS).map(([id, p]) => ({
     id,
     label: p.label,
@@ -72,9 +74,84 @@ function MUSCO_RIGS(off = {}) {
     aim: p.aim,
     angle: p.angle,
     readOnly: !!p.readOnly,
+    // ptz: the joystick moves it (settings.aimU/aimV; see withPtzAim)
+    ptz: ptz && !p.readOnly,
     start: { ...MUSCO_START, focal: p.focal, ...(off[id] || {}) },
   }));
 }
+// Taking calls on a Musco PTZ (Homework 5). `c` is a step's ctx.
+const onShot = (c, id, target, kind) => shotOk(shotReport(c.rigs[id], c.scene, target), kind);
+function aimedAt(c, id, target, tol) {
+  const r = shotReport(c.rigs[id], c.scene, target);
+  return r.visible && Math.abs(r.offX) <= tol && Math.abs(r.offY) <= tol + 0.03;
+}
+function shotNotYet(c, id, target, kind, { aimOnly = false, tol = 0.12 } = {}) {
+  if (c.activeRig !== id) return `Camera ${id}'s button isn't lit: you're on Camera ${c.activeRig}. Press ${id} on the RP150 first.`;
+  const r = shotReport(c.rigs[id], c.scene, target);
+  if (aimOnly && r.visible) {
+    const dirs = [Math.abs(r.offX) > tol && `pan ${r.offX < 0 ? "left" : "right"}`, Math.abs(r.offY) > tol + 0.03 && `tilt ${r.offY < 0 ? "up" : "down"}`].filter(Boolean);
+    return `Close: ${dirs.join(" and ")} a little more.`;
+  }
+  if (!aimOnly && r.sharp === false && framedOk(r, kind) && c.rigs[id].settings.auto?.focus) return "Still on FOCUS AUTO: once it's sharp, press it again to turn AUTO off.";
+  return shotAdvice(r, `Camera ${id}`, kind);
+}
+
+// The Homework 5 gig: you run one pair of close-ups (who runs which pair is
+// decided at each gig), and the switcher takes your shots in turn. One pair
+// is picked each time the page loads; tests check both (gigStation).
+const GIG_PAIRS = {
+  "1-3": {
+    start: { 1: { aimU: 0.64, aimV: 0.72, focal: 100, focus: 7 }, 3: { aimU: 0.5, aimV: 0.36, focal: 70, focus: 7 } },
+    calls: [["1", "flutes", "section"], ["3", "clarinets", "section"], ["1", "first-trumpet", "single"], ["3", "saxes", "section"]],
+  },
+  "4-6": {
+    start: { 4: { aimU: 0.62, aimV: 0.36, focal: 80, focus: 7 }, 6: { aimU: 0.32, aimV: 0.7, focal: 90, focus: 7 } },
+    calls: [["4", "trumpets", "section"], ["6", "horns", "section"], ["4", "trombones", "section"], ["6", "tuba", "single"]],
+  },
+};
+const SIZE_WORD = { section: "", single: ", tight" };
+export function gigStation(pairKey) {
+  const pair = GIG_PAIRS[pairKey];
+  const mine = Object.keys(pair.start);
+  const others = ["1", "3", "4", "6"].filter((id) => !mine.includes(id));
+  const leftAlone = [checks.untouched("2"), ...others.map((id) => checks.untouched(id, { why: "is the other operator's camera, and it changed. Check which button is lit before you touch anything." }))];
+  const calls = pair.calls.map(([id, target, kind], i) => {
+    const prev = i ? pair.calls[i - 1][0] : "2";
+    const label = { flutes: "the flutes", clarinets: "the clarinets", "first-trumpet": "the first trumpet", saxes: "the saxes", trumpets: "the trumpets", horns: "the horns", trombones: "the trombones", tuba: "the tuba" }[target];
+    return {
+      enter: { tally: { program: prev, preview: id } },
+      text: `${i ? `The switcher took Camera ${prev}: it's red now.` : "The concert has started on Camera 2, the static wide."} <strong>“Camera ${id}, ${label}${SIZE_WORD[kind]}.”</strong>`,
+      when: (c) => onShot(c, id, target, kind) && !c.rigs[id].settings.auto?.focus && leftAlone.every((k) => k.test(c).pass),
+      notYet: (c) => {
+        const bad = leftAlone.map((k) => k.test(c)).find((r) => !r.pass);
+        if (bad) return bad.detail;
+        if (onShot(c, id, target, kind) && c.rigs[id].settings.auto?.focus) return "Framed and sharp, but FOCUS AUTO is still on. Turn it off so it doesn't hunt.";
+        return shotNotYet(c, id, target, kind);
+      },
+      done: i === pair.calls.length - 1 ? "Four calls, four shots ready on time, and nothing moved on the red camera. That's the camera operator's job at a Musco gig." : `Ready on ${id}.`,
+    };
+  });
+  return {
+    id: "musco-gig-calls",
+    title: "Musco Gig: Take the Calls",
+    purpose: "Your pair of close-ups, four calls, and the tally. A different pair some days.",
+    group: "hw5",
+    accent: "#FF6B9A",
+    mode: "guided",
+    scene: "musco-concert",
+    bodyControls: true,
+    liveRule: true,
+    ptSpeed: 3,
+    startRig: mine[0],
+    tally: { program: "2", preview: null },
+    rigs: MUSCO_RIGS(pair.start, { ptz: true }),
+    tools: { available: ["hud", "magnify"], on: [] },
+    intro: `Tonight you run Cameras <strong>${mine.join(" and ")}</strong>; the other operator has ${others.join(" and ")}, and nobody touches Camera 2. Your cameras were left soft and pointed the wrong way. The director calls; you get each shot framed and sharp (AUTO focus on, then off) on the camera that isn't red.`,
+    steps: calls,
+  };
+}
+const MUSCO_GIG = [gigStation(Math.random() < 0.5 ? "1-3" : "4-6")];
+
 // Lens Shopping: is everyone (standing to bow) inside the frame, and which
 // GH5 lens is the longest that still gets them all in from here?
 const LENSES = ["gh5-14-140", "gh5-12-60", "gh5-9-18", "gh5-7-5"];
@@ -932,8 +1009,7 @@ export const stations = [
   // One controller, many cameras: read the multiview, pick a camera on the
   // RP150, read its screen, and shade every PTZ to match the static wide
   // under the brightest cue. Camera numbers follow the instructor's multiview
-  // map; positions on stage are illustrative (README). Warm-ups review HW3
-  // (Salmon numbers, AX100 off auto) and HW2 (ND).
+  // map; positions on stage are illustrative (README).
   {
     id: "warmup-salmon-numbers",
     title: "Warm-up: The Salmon Numbers",
@@ -977,31 +1053,6 @@ export const stations = [
     brief: "Refresher from Homework 3. Full auto, dark hall, solo pianist. Take it off auto and expose the performer properly — fast.",
     goals: ["Performer correctly exposed", "Iris, shutter, gain locked", "1/60, 9 dB or less", "3200K, no shift"],
     criteria: [checks.rigExposure(-0.6, 0.6, { rig: "A" }), checks.noAutoExposure({ rig: "A" }), checks.shutterIs(60, { rig: "A" }), checks.maxGainDb(9, { rig: "A" }), checks.whiteBalance(3200, { rig: "A" })],
-  },
-  {
-    id: "warmup-nd",
-    title: "Warm-up: Fixed It With the Shutter",
-    purpose: "Refresher — ND on a random body. Smooth motion and a soft background, in full sun.",
-    group: "hw4",
-    accent: "#9BE564",
-    mode: "challenge",
-    scene: "park",
-    cameraPool: ["ax100", "gh5", "lab", "ff"],
-    start: { fps: 30, shutter: 2000, aperture: 2.8, iso: 100, gainDb: 0, nd: 0, focus: 3, wb: 5600 },
-    controls: ["aperture", "shutter", "iso", "nd", "focus"],
-    tools: { available: ["meter", "histogram", "zebras", "dof", "hud"], on: ["hud"] },
-    brief: "Refresher from Homework 2. Full sun, and the client wants the person sharp against soft trees. The last operator got the brightness right by turning the shutter up to 1/2000 — so at 30p every movement looks choppy. Fix the motion without losing the soft background or the exposure. A different camera each time you open this.",
-    goals: ["Natural motion at 30p", "Person sharp", "Trees soft", "Good exposure"],
-    criteria: [
-      checks.shutterAngle(120, 250),
-      checks.inFocus("person"),
-      checks.blurred("trees", 5.5),
-      checks.exposure(-0.7, 0.7, {
-        bright: "Slowing the shutter let in about five stops more light. Closing the iris would sharpen the trees — add <strong>ND</strong> instead: it cuts light and changes nothing else.",
-        dark: "Built-in ND can come in big steps. If the ND that keeps the trees soft leaves the picture a little dark, make up the difference with a little gain.",
-      }),
-    ],
-    passNote: "1/2000 to 1/60 is five stops more light, and ND takes them back. The AX100's ND switch jumps 2, 4 or 6 stops, so it usually lands with a little gain on top; the GH5 has no built-in ND, so it needs a filter screwed onto the lens. Same job, different hardware.",
   },
   {
     id: "musco-multiview",
@@ -1113,51 +1164,6 @@ export const stations = [
     ],
   },
   {
-    id: "musco-which-button",
-    title: "Musco: Which Button Is Lit?",
-    purpose: "Two cameras left to shade, and the controller is still on the last one you finished.",
-    group: "hw4",
-    accent: "#FF9F7C",
-    mode: "challenge",
-    scene: "musco-concert",
-    bodyControls: true,
-    startRig: "4",
-    rigs: MUSCO_RIGS({
-      1: { aperture: 4 },
-      6: { rGain: 30 },
-    }),
-    tools: { available: ["meter", "waveform", "hud"], on: [] },
-    brief: "The brightest cue is up. You've just shaded Cameras 3 and 4, and they match Camera 2, the static wide. Cameras 1 and 6 still need it. Match them to Camera 2 without disturbing the three that are already right.",
-    goals: ["Cameras 1 and 6: color, brightness and blacks match Camera 2", "Cameras 3 and 4 as you left them", "Camera 2 untouched"],
-    criteria: [
-      ...["1", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
-      ...["3", "4"].map((id) => checks.untouched(id, { why: "was changed, and it was already right. Look at which camera button is lit before you turn a knob." })),
-      checks.untouched("2"),
-    ],
-    passNote: "Every time you pick up the controller, check which button is lit first. A knob turned on the wrong camera spoils a shot that was right, and if that camera is on Program, everyone watching sees it happen.",
-  },
-  {
-    id: "musco-looks-off",
-    title: "Musco: One of Them Looks Off",
-    purpose: "Nobody tells you which camera. Find the one that doesn't match — a different one each time.",
-    group: "hw4",
-    accent: "#C9B8FF",
-    mode: "challenge",
-    scene: "musco-concert",
-    bodyControls: true,
-    rigs: MUSCO_RIGS(),
-    // One camera, one small fault: blacks, color or brightness.
-    faultPool: [{ 1: { mPed: 8 } }, { 3: { bGain: 30 } }, { 4: { aperture: 4.5 } }, { 6: { rGain: 25 } }],
-    tools: { available: ["meter", "waveform", "hud"], on: [] },
-    brief: "Ten minutes to downbeat, brightest cue up. The person switching cuts around the multiview and says, \"One of the close-ups looks off.\" That's all you get. Find it, fix it, and leave the rest alone. (A different camera each time you open this.)",
-    goals: ["Cameras 1, 3, 4, 6: color, brightness and blacks match Camera 2", "Camera 2 untouched"],
-    criteria: [
-      ...["1", "3", "4", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
-      checks.untouched("2"),
-    ],
-    passNote: "Two ways to find it, and a good operator uses both: compare each monitor with Camera 2 (that's what the multiview is for), and read each camera's screen for anything off the house defaults.",
-  },
-  {
     id: "musco-shade-all",
     title: "Musco: Make It Look Like One Room",
     purpose: "Shade four PTZ cameras to match the static wide. Every cut depends on it.",
@@ -1181,6 +1187,273 @@ export const stations = [
     ],
     passNote: "One room. On the real controller you'd finish by comparing the multiview under the brightest cue — and on a vectorscope and waveform, if you have them.",
   },
+
+  // ---------- homework 5: running a PTZ at Musco ----------
+  // The camera operator's half of a Musco gig: the joystick, P/T speed,
+  // zoom and focus; shot sizes; the tally (red = on program, hands off);
+  // taking calls; and a first go on the switcher. Warm-ups review HW2 (ND)
+  // and HW4 (shading, the lit-button trap). Which camera usually covers
+  // which section, the joystick's tilt direction and the speed knob's range
+  // are the sim's (README → Technical verification).
+  {
+    id: "warmup-nd",
+    title: "Warm-up: Fixed It With the Shutter",
+    purpose: "Refresher — ND on a random body. Smooth motion and a soft background, in full sun.",
+    group: "hw5",
+    accent: "#9BE564",
+    mode: "challenge",
+    scene: "park",
+    cameraPool: ["ax100", "gh5", "lab", "ff"],
+    start: { fps: 30, shutter: 2000, aperture: 2.8, iso: 100, gainDb: 0, nd: 0, focus: 3, wb: 5600 },
+    controls: ["aperture", "shutter", "iso", "nd", "focus"],
+    tools: { available: ["meter", "histogram", "zebras", "dof", "hud"], on: ["hud"] },
+    brief: "Refresher from Homework 2. Full sun, and the client wants the person sharp against soft trees. The last operator got the brightness right by turning the shutter up to 1/2000 — so at 30p every movement looks choppy. Fix the motion without losing the soft background or the exposure. A different camera each time you open this.",
+    goals: ["Natural motion at 30p", "Person sharp", "Trees soft", "Good exposure"],
+    criteria: [
+      checks.shutterAngle(120, 250),
+      checks.inFocus("person"),
+      checks.blurred("trees", 5.5),
+      checks.exposure(-0.7, 0.7, {
+        bright: "Slowing the shutter let in about five stops more light. Closing the iris would sharpen the trees — add <strong>ND</strong> instead: it cuts light and changes nothing else.",
+        dark: "Built-in ND can come in big steps. If the ND that keeps the trees soft leaves the picture a little dark, make up the difference with a little gain.",
+      }),
+    ],
+    passNote: "1/2000 to 1/60 is five stops more light, and ND takes them back. The AX100's ND switch jumps 2, 4 or 6 stops, so it usually lands with a little gain on top; the GH5 has no built-in ND, so it needs a filter screwed onto the lens. Same job, different hardware.",
+  },
+  {
+    id: "musco-which-button",
+    title: "Musco: Which Button Is Lit?",
+    purpose: "Refresher — two cameras left to shade, and the controller is still on the last one you finished.",
+    group: "hw5",
+    accent: "#FF9F7C",
+    mode: "challenge",
+    scene: "musco-concert",
+    bodyControls: true,
+    startRig: "4",
+    rigs: MUSCO_RIGS({
+      1: { aperture: 4 },
+      6: { rGain: 30 },
+    }),
+    tools: { available: ["meter", "waveform", "hud"], on: [] },
+    brief: "Refresher from Homework 4. The brightest cue is up. You've just shaded Cameras 3 and 4, and they match Camera 2, the static wide. Cameras 1 and 6 still need it. Match them to Camera 2 without disturbing the three that are already right.",
+    goals: ["Cameras 1 and 6: color, brightness and blacks match Camera 2", "Cameras 3 and 4 as you left them", "Camera 2 untouched"],
+    criteria: [
+      ...["1", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
+      ...["3", "4"].map((id) => checks.untouched(id, { why: "was changed, and it was already right. Look at which camera button is lit before you turn a knob." })),
+      checks.untouched("2"),
+    ],
+    passNote: "Every time you pick up the controller, check which button is lit first. A knob turned on the wrong camera spoils a shot that was right, and if that camera is on Program, everyone watching sees it happen.",
+  },
+  {
+    id: "musco-looks-off",
+    title: "Musco: One of Them Looks Off",
+    purpose: "Refresher — nobody tells you which camera. Find the one that doesn't match — a different one each time.",
+    group: "hw5",
+    accent: "#C9B8FF",
+    mode: "challenge",
+    scene: "musco-concert",
+    bodyControls: true,
+    rigs: MUSCO_RIGS(),
+    // One camera, one small fault: blacks, color or brightness.
+    faultPool: [{ 1: { mPed: 8 } }, { 3: { bGain: 30 } }, { 4: { aperture: 4.5 } }, { 6: { rGain: 25 } }],
+    tools: { available: ["meter", "waveform", "hud"], on: [] },
+    brief: "Refresher from Homework 4. Ten minutes to downbeat, brightest cue up. The person switching cuts around the multiview and says, \"One of the close-ups looks off.\" That's all you get. Find it, fix it, and leave the rest alone. (A different camera each time you open this.)",
+    goals: ["Cameras 1, 3, 4, 6: color, brightness and blacks match Camera 2", "Camera 2 untouched"],
+    criteria: [
+      ...["1", "3", "4", "6"].flatMap((id) => [checks.colorMatches("2", { rig: id }), checks.brightnessMatches("2", { rig: id }), checks.blacksMatch("2", { rig: id })]),
+      checks.untouched("2"),
+    ],
+    passNote: "Two ways to find it, and a good operator uses both: compare each monitor with Camera 2 (that's what the multiview is for), and read each camera's screen for anything off the house defaults.",
+  },
+  {
+    id: "musco-drive-ptz",
+    title: "Musco: Drive a PTZ",
+    purpose: "The joystick, P/T speed, the zoom lever and focus — on one camera.",
+    group: "hw5",
+    accent: "#36D07A",
+    mode: "guided",
+    scene: "musco-concert",
+    bodyControls: true,
+    ptSpeed: 4,
+    startRig: "4",
+    rigs: MUSCO_RIGS({ 4: { aimU: 0.7, aimV: 0.3, focal: 80, focus: 8 } }, { ptz: true }),
+    tools: { available: ["hud"], on: [] },
+    intro:
+      "In Homework 4 you shaded these cameras. Now you drive one. On the RP150, the <strong>joystick</strong> pans (left and right) and tilts (up and down) whichever camera's button is lit; the <strong>zoom lever</strong> zooms it; <strong>FOCUS AUTO</strong> focuses it. Before a show, nudge the stick once to learn which way this controller tilts: on some controllers it's set the other way round.",
+    steps: [
+      {
+        text: "Camera 4's button is lit. Its last operator left it pointing at the stage shell. Push the joystick to bring the <strong>trumpets</strong> (back row, house left) into the middle of the frame. Don't zoom yet.",
+        when: (c) => aimedAt(c, "4", "trumpets", 0.12),
+        notYet: (c) => shotNotYet(c, "4", "trumpets", "section", { aimOnly: true }),
+        hint: "Drag the stick toward where you want the camera to look, and hold it there. The farther you push, the faster it goes.",
+        done: "Found them. At P/T SPEED 4 that's quick — handy for getting somewhere, rough for framing.",
+      },
+      {
+        text: "Turn <strong>P/T SPEED</strong> down to 1 or 2. Then center the trumpets again, precisely. Slow is for the last bit of framing, and for any move that might be on air.",
+        when: (c) => c.ptSpeed <= 2 && c.touchedKeys.has("pan:slow") && aimedAt(c, "4", "trumpets", 0.06),
+        notYet: (c) => (c.ptSpeed > 2 ? `P/T SPEED is on ${c.ptSpeed}. Turn it down to 1 or 2 first.` : !c.touchedKeys.has("pan:slow") ? "Now make a small move with the stick at that speed." : shotNotYet(c, "4", "trumpets", "section", { aimOnly: true, tol: 0.06 })),
+        done: "Slow and precise. On a real controller you'd set the speed once for the show and push gently, not slam the stick.",
+      },
+      {
+        text: "Zoom in (<strong>T</strong>) until the trumpet section fills the frame: all four players in, nobody's head or bell cut off. Keep them centered as you go. Zoomed in, the same push moves the picture a lot less.",
+        when: (c) => framedOk(shotReport(c.rigs["4"], c.scene, "trumpets"), "section"),
+        notYet: (c) => shotNotYet(c, "4", "trumpets", "section", { framingOnly: true }),
+        hint: "Zoom a little, re-center a little, and repeat. Re-centering at full zoom is fiddly, so keep it centered on the way in.",
+        done: "That's a section shot: one section filling the frame, nobody cut off.",
+      },
+      {
+        text: "Look closely: they're <strong>soft</strong>. The last operator left focus close. Press <strong>FOCUS AUTO</strong>, let it find the trumpets, then press <strong>FOCUS AUTO</strong> again to turn it off.",
+        when: (c) => c.touchedKeys.has("auto:focus") && !c.rigs["4"].settings.auto?.focus && shotOk(shotReport(c.rigs["4"], c.scene, "trumpets"), "section"),
+        notYet: (c) =>
+          c.rigs["4"].settings.auto?.focus
+            ? "It's still on AUTO. Once it's sharp, press FOCUS AUTO again to turn it off."
+            : !c.touchedKeys.has("auto:focus")
+              ? "Press FOCUS AUTO."
+              : shotNotYet(c, "4", "trumpets", "section"),
+        done: "AUTO on to find focus, AUTO off so it stays put. Left on, autofocus hunts when someone stands up in front, or when the lights go out and come back. Zoomed out, focus barely mattered; zoomed in, it's the first thing anyone notices.",
+      },
+    ],
+  },
+  {
+    id: "musco-shot-sizes",
+    title: "Musco: Wide, Section, Tight",
+    purpose: "The three shot sizes a director calls, on one close-up camera.",
+    group: "hw5",
+    accent: "#FFB86B",
+    mode: "guided",
+    scene: "musco-concert",
+    bodyControls: true,
+    ptSpeed: 3,
+    startRig: "6",
+    rigs: MUSCO_RIGS({ 6: { focal: 70 } }, { ptz: true }),
+    tools: { available: ["hud"], on: [] },
+    intro:
+      "A director calls shots by camera, size and subject: “Camera 6, tight on the tuba.” Three sizes do most of the work at a concert. The joystick and zoom are on Camera 6 (house right).",
+    steps: [
+      {
+        text: "<strong>Wide:</strong> frame the whole band from Camera 6, everyone in, with a little air. (The same shot as the static wide. It's how a close-up camera finds its place.)",
+        when: (c) => framedOk(shotReport(c.rigs["6"], c.scene, "ensemble"), "wide"),
+        notYet: (c) => shotNotYet(c, "6", "ensemble", "wide", { framingOnly: true }),
+        done: "Wide. The director cuts to it to show the whole room, and between close-ups when nothing else is ready.",
+      },
+      {
+        text: "<strong>Section:</strong> the <strong>horns</strong> (second row, house right). Fill the frame with them, nobody cut off.",
+        when: (c) => framedOk(shotReport(c.rigs["6"], c.scene, "horns"), "section"),
+        notYet: (c) => shotNotYet(c, "6", "horns", "section", { framingOnly: true }),
+        done: "A section shot: what you'd give for a section's entrance or a soli.",
+      },
+      {
+        text: "<strong>Tight:</strong> the <strong>tuba</strong>. One player, centered, the lens all the way in.",
+        when: (c) => framedOk(shotReport(c.rigs["6"], c.scene, "tuba"), "single"),
+        notYet: (c) => shotNotYet(c, "6", "tuba", "single", { framingOnly: true }),
+        hint: "Turn P/T SPEED down for this one. All the way in, a tiny push is a big move.",
+        done: "Tight: for a solo. (A real UE150 zooms far closer than this sim can draw. In the booth, “tight” on a soloist is head and shoulders.)",
+      },
+      {
+        text: "Now the <strong>percussion</strong>, the whole back row. Some sections are wider than the long end of the lens: zoom <em>out</em> until they all fit.",
+        when: (c) => framedOk(shotReport(c.rigs["6"], c.scene, "percussion"), "section"),
+        notYet: (c) => shotNotYet(c, "6", "percussion", "section", { framingOnly: true }),
+        done: "Section shots aren't one zoom setting: the frame fits the section. Next: doing this while the other camera is live.",
+      },
+    ],
+  },
+  {
+    id: "musco-red-means-live",
+    title: "Musco: Red Means Live",
+    purpose: "Tally lights, and taking a call while your other camera is on program.",
+    group: "hw5",
+    accent: "#FF5A64",
+    mode: "guided",
+    scene: "musco-concert",
+    bodyControls: true,
+    liveRule: true,
+    ptSpeed: 3,
+    startRig: "1",
+    tally: { program: "3", preview: "1" },
+    rigs: MUSCO_RIGS({ 1: { aimU: 0.62, aimV: 0.7, focal: 100 }, 3: { aimU: 0.5, aimV: 0.62, focal: 70, focus: 7 } }, { ptz: true }),
+    tools: { available: ["hud"], on: [] },
+    intro:
+      "Close-ups 1, 3, 4 and 6 are run by two camera operators, two cameras each. Tonight yours are <strong>1 and 3</strong>. On the multiview, a <strong>red</strong> border means that camera is on <strong>program</strong>: going out live. <strong>Green</strong> is preview: what the switcher will take next. You never move the red camera.",
+    steps: [
+      {
+        text: "Camera 3 is red. The call: <strong>“Camera 1, the flutes.”</strong> Get the section shot on Camera 1 without touching Camera 3.",
+        when: (c) => onShot(c, "1", "flutes", "section"),
+        notYet: (c) => shotNotYet(c, "1", "flutes", "section"),
+        done: "Ready on 1. The switcher can take it whenever the director wants.",
+      },
+      {
+        enter: { tally: { program: "1", preview: "3" } },
+        text: "The switcher took Camera 1. It's red now, so hands off. Next call: <strong>“Camera 3, the clarinets.”</strong> (Front row, house right.)",
+        when: (c) => onShot(c, "3", "clarinets", "section"),
+        notYet: (c) => shotNotYet(c, "3", "clarinets", "section"),
+        done: "Ready on 3. While one camera is live, the other gets the next shot ready. That's the whole rhythm of the job.",
+      },
+      {
+        enter: { tally: { program: "3", preview: "1" } },
+        text: "3 is live with the clarinets. <strong>“Camera 1, the first trumpet, tight.”</strong>",
+        when: (c) => onShot(c, "1", "first-trumpet", "single"),
+        notYet: (c) => shotNotYet(c, "1", "first-trumpet", "single"),
+        hint: "The first trumpet sits closest to the center of the trumpet row.",
+        done: "That's taking calls. If a call asks you to move the camera that's live, ask to be cleared first (“clear on 3?”) or wait for the switcher to take another shot.",
+      },
+    ],
+  },
+  {
+    id: "musco-ready-take",
+    title: "Musco: Ready… Take",
+    purpose: "A first go on the switcher: preview, CUT, and the safe shot.",
+    group: "hw5",
+    accent: "#4FD1FF",
+    mode: "guided",
+    scene: "musco-concert",
+    switcher: true,
+    startRig: "2",
+    tally: { program: "2", preview: null },
+    rigs: MUSCO_RIGS({ 4: { aimU: 0.72, aimV: 0.66, focal: 110 } }, { ptz: true }),
+    tools: { available: [], on: [] },
+    intro:
+      "Tonight you're on the switcher, and two operators run the close-ups. The director calls <strong>“ready”</strong> (put it in preview, green) and then <strong>“take”</strong> (CUT: it goes to program, red). The big picture follows program.",
+    steps: [
+      {
+        text: "The show opens on Camera 2, the static wide. The director: <strong>“Ready 3.”</strong>",
+        when: (c) => c.tally.preview === "3",
+        notYet: "Press 3 on the PREVIEW row (or tap Camera 3's monitor).",
+        done: "3 is green: in preview. Nothing has changed for the audience yet. That's the point of preview: you look before you take.",
+      },
+      {
+        text: "<strong>“Take 3.”</strong>",
+        when: (c) => c.tally.program === "3",
+        notYet: (c) => (c.tally.preview !== "3" ? "Put 3 in preview first." : "Press CUT."),
+        done: "CUT swaps them: 3 is live, and 2 dropped into preview, ready to come back.",
+      },
+      {
+        enter: { moves: [{ rig: "4", to: { target: "trumpets", focal: 120 }, seconds: 14 }] },
+        text: "A trumpet solo is coming. Watch Camera 4: its operator is still swinging it over to the trumpets. The director says “Ready 4…” and the solo starts <em>before Camera 4 has landed</em>. Get something safe on program, now.",
+        when: (c) => (c.tally.program === "2" && c.touchedKeys.has("program:2")) || (c.tally.program === "4" && !c.touchedKeys.has("program:4:moving") && !c.rigs["4"].moving),
+        notYet: (c) =>
+          c.touchedKeys.has("program:4:moving")
+            ? "Camera 4 was still moving when you took it, so the swing went out live. When the shot you want isn't ready, take the one that always is."
+            : "The solo's started. Which camera is always ready?",
+        done: (c) =>
+          c.tally.program === "2"
+            ? "The static wide. It's never wrong, and it buys the operator a few seconds."
+            : "You waited until 4 had landed. That works too, as long as program wasn't sitting on the wrong shot meanwhile. When in doubt, the static wide.",
+      },
+      {
+        text: "Camera 4 has landed: trumpets, framed and sharp. <strong>“Ready 4… take 4.”</strong>",
+        when: (c) => c.tally.program === "4" && !c.rigs["4"].moving,
+        notYet: (c) => (c.rigs["4"].moving ? "Camera 4 is still moving. Wait for it to settle." : c.tally.preview !== "4" ? "Ready 4: put it in preview." : "Take 4: press CUT."),
+        done: "The solo, on the shot that was ready for it.",
+      },
+      {
+        text: "The solo's over and the piece is ending. <strong>“Ready 2… take 2.”</strong> The static wide opens and closes every piece, and it's on for the bows.",
+        when: (c) => c.tally.program === "2" && c.touchedKeys.has("program:2"),
+        notYet: (c) => (c.tally.preview !== "2" ? "Ready 2: put the static wide in preview." : "Take 2: press CUT."),
+        done: "Ready, take, and the static wide whenever nothing else is ready. That's the switcher's half of every call you took as an operator.",
+      },
+    ],
+  },
+  ...MUSCO_GIG,
 
   // ---------------- play ----------------
   {

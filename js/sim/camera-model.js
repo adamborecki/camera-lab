@@ -220,7 +220,39 @@ export function normalizeSettings(s, camera, scene) {
   out.rPed = shade ? clampI(s.rPed, shade.ped) : 0;
   out.bPed = shade ? clampI(s.bPed, shade.ped) : 0;
   out.mPed = shade ? clampI(s.mPed, shade.ped) : 0;
+  // A PTZ's pan/tilt (aimU/aimV, the middle of its frame in drawn-scene uv)
+  // stays where the frame can still be drawn at this zoom.
+  if (s.aimU != null) {
+    const half = 0.5 / Math.max(1, out.focal / scene.equivFocal);
+    out.aimU = Math.min(1 - half, Math.max(half, s.aimU));
+    out.aimV = Math.min(1 - half, Math.max(half, s.aimV ?? 0.5));
+  }
   return out;
+}
+
+// ---------- pan & tilt (PTZ bodies on a joystick) ----------
+//
+// A fixed camera points at its subject and zooms straight in on it
+// (frameCenter). A PTZ points wherever the operator left it: settings.aimU
+// and aimV are the middle of its frame, in drawn-scene uv, and the lens
+// zooms about that point, as a real PTZ zooms about its optical axis. Rigs
+// marked `ptz` start pointed where a fixed camera with the same aim and
+// zoom would be, so the first picture is the same either way.
+export function withPtzAim(settings, scene, aim) {
+  if (settings.aimU != null) return settings;
+  const c = frameCenter(aim || scene.aim, settings.focal / scene.equivFocal, scene.maxFrameZoom || MAX_FRAME_ZOOM);
+  return { ...settings, aimU: c.x, aimV: c.y };
+}
+
+// Where a rig's frame sits in the drawn scene: { x, y, zoom }.
+export function viewFor(scene, settings, derived, aim) {
+  const zoom = derived.frameZoom;
+  if (settings.aimU != null) {
+    const half = 0.5 / Math.max(1, zoom);
+    return { x: Math.min(1 - half, Math.max(half, settings.aimU)), y: Math.min(1 - half, Math.max(half, settings.aimV)), zoom };
+  }
+  const c = frameCenter(aim || scene.aim, zoom, scene.maxFrameZoom || MAX_FRAME_ZOOM);
+  return { x: c.x, y: c.y, zoom };
 }
 
 // Station data speaks in ISO ("iso: 800"); convert once on load. A station
@@ -245,6 +277,7 @@ export function settingsFromPreset(p, scene) {
     rPed: p.rPed ?? 0,
     bPed: p.bPed ?? 0,
     mPed: p.mPed ?? 0,
+    ...(p.aimU != null ? { aimU: p.aimU, aimV: p.aimV } : {}),
   };
 }
 

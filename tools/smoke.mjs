@@ -150,6 +150,97 @@ for (const [w, h, tag] of [
   await page.close();
 }
 
+// ---- Homework 5: the RP150 joystick, the tally, the switcher ----
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  page.on("pageerror", (e) => failures.push(`hw5 pageerror: ${e.message}`));
+  const aim = () => page.evaluate(() => [cameraLab.get().settings.aimU, cameraLab.get().settings.aimV]);
+  // Point the active rig at a named target (parallax included), at a focal length.
+  const frame = (rigId, target, focal) =>
+    page.evaluate(
+      async ([rigId, target, focal]) => {
+        const { getScene } = await import("/js/scenes/index.js");
+        const sc = getScene("musco-concert");
+        const t = sc.targets[target];
+        const a = cameraLab.get().rigs[rigId].def.angle;
+        const du = a ? a.shift * (1 / t.depth - 1 / a.aimDepth) : 0;
+        cameraLab.set("focal", focal);
+        cameraLab.set("aimU", (t.x0 + t.x1) / 2 + du);
+        cameraLab.set("aimV", (t.y0 + t.y1) / 2);
+        cameraLab.set("focus", t.depth);
+      },
+      [rigId, target, focal],
+    );
+  const drag = async (dx, dy, ms = 500) => {
+    await page.locator(".rp-joy").scrollIntoViewIfNeeded();
+    const b = await page.locator(".rp-joy").boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + dx, cy + dy, { steps: 4 });
+    await page.waitForTimeout(ms);
+    await page.mouse.up();
+  };
+  await open(page, "musco-drive-ptz");
+  const a0 = await aim();
+  await drag(-50, 0);
+  const a1 = await aim();
+  if (!(a1[0] < a0[0] - 0.01)) failures.push(`joystick left should pan left: ${a0} → ${a1}`);
+  await drag(0, 50);
+  const a2 = await aim();
+  if (!(a2[1] > a1[1] + 0.01)) failures.push(`joystick down should tilt down: ${a1} → ${a2}`);
+  await check(page, false, "drive-ptz: not on the trumpets yet");
+  await frame("4", "trumpets", 80);
+  await check(page, true, "drive-ptz step 1");
+  const speed = page.locator(".rp-speed .knob-step");
+  await speed.first().click();
+  await speed.first().click();
+  await page.focus(".rp-joy");
+  await page.keyboard.press("ArrowLeft");
+  await frame("4", "trumpets", 80);
+  await check(page, true, "drive-ptz step 2 (slow)");
+  await frame("4", "trumpets", 130);
+  await page.evaluate(() => cameraLab.set("focus", 8));
+  await check(page, true, "drive-ptz step 3 (section)");
+  await page.click("[data-focus-auto]");
+  await page.waitForTimeout(2500);
+  await page.click("[data-focus-auto]");
+  await check(page, true, "drive-ptz step 4 (focus auto on → off)");
+
+  // Red means live: touching the program camera fails the step once.
+  await open(page, "musco-red-means-live");
+  if (!(await page.locator(".monitor-tile.pgm .monitor-name").innerText()).includes("Camera 3")) failures.push("red-means-live: Camera 3 should have the red tally");
+  await page.click('.rp-cam[data-cam="3"]');
+  await drag(30, 0, 200);
+  if (!/on PROGRAM/.test(await page.locator(".feed").innerText())) failures.push("moving the program camera should warn");
+  await page.click('.rp-cam[data-cam="1"]');
+  await frame("1", "flutes", 125);
+  await check(page, false, "red-means-live: moved the live camera");
+  await check(page, true, "red-means-live step 1 after the warning");
+  if (!(await page.locator(".monitor-tile.pgm .monitor-name").innerText()).includes("Camera 1")) failures.push("red-means-live: step 2 should put Camera 1 on program");
+
+  // Ready… Take: the student switches.
+  await open(page, "musco-ready-take");
+  await page.click('[data-bus="preview"] [data-src="3"]');
+  await check(page, true, "ready 3");
+  await page.click("[data-cut]");
+  await check(page, true, "take 3");
+  await page.waitForTimeout(300);
+  await page.click('[data-bus="program"] [data-src="4"]');
+  await check(page, false, "took camera 4 mid-move");
+  await page.click('[data-bus="program"] [data-src="2"]');
+  await check(page, true, "safe shot: 2");
+  await page.waitForTimeout(14500);
+  await page.click('[data-bus="preview"] [data-src="4"]');
+  await page.click("[data-cut]");
+  await check(page, true, "take 4 after it landed");
+  await page.click('[data-bus="preview"] [data-src="2"]');
+  await page.click("[data-cut]");
+  await check(page, true, "back to 2");
+  await page.close();
+}
+
 // ---- Salmon livestream ----
 {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -228,4 +319,4 @@ if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100, WB pad, RP150, livestream and lens-shopping walkthroughs`);
+console.log(`smoke ok: ${stations.length} stations × 2 viewports, AX100, WB pad, RP150, HW5 PTZ/tally/switcher, livestream and lens-shopping walkthroughs`);

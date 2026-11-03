@@ -194,6 +194,38 @@ export function makeMuscoScene(state = "concert") {
     baton,
   ];
   const all = people.map((p) => cam.dist(p.x, 1.2, p.z));
+  // Shots a director can call, as boxes in the drawn picture (uv, v down):
+  // a section, one player, or the whole band. Each person's box is their
+  // seated (or standing) height and a little more than shoulder width, so
+  // "nobody cut off" means heads and elbows are in. Which camera usually
+  // gets which shot is made up (README → Technical verification).
+  const boxOf = (ps) => {
+    const pts = ps.flatMap((p) => {
+      const top = (p.y0 || 0) + (p.pose === "sit" ? 1.42 : 1.78);
+      return [cam.uv(p.x - 0.36, p.y0 || 0, p.z), cam.uv(p.x + 0.36, top, p.z)];
+    });
+    const xs = pts.map((q) => q[0]);
+    const ys = pts.map((q) => q[1]);
+    const d = ps.reduce((a, p) => a + cam.dist(p.x, 1.1, p.z), 0) / ps.length;
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), depth: d };
+  };
+  const seated = people.filter((p) => p.pose === "sit");
+  const byInst = (inst, z) => seated.filter((p) => p.inst === inst && (z == null || Math.abs(p.z - z) < 0.8)).sort((a, b) => a.x - b.x);
+  const nearest = (list) => list.reduce((a, p) => (Math.abs(p.x) < Math.abs(a.x) ? p : a));
+  const targets = {
+    ensemble: { label: "the whole band", kind: "wide", ...boxOf(people.filter((p) => p.pose !== "conduct")) },
+    flutes: { label: "the flutes", kind: "section", ...boxOf(byInst("flute")) },
+    clarinets: { label: "the clarinets (front row)", kind: "section", ...boxOf(byInst("clarinet", 15)) },
+    saxes: { label: "the saxes", kind: "section", ...boxOf(byInst("sax")) },
+    horns: { label: "the horns", kind: "section", ...boxOf(byInst("horn")) },
+    trumpets: { label: "the trumpets", kind: "section", ...boxOf(byInst("trumpet")) },
+    trombones: { label: "the trombones", kind: "section", ...boxOf(byInst("trombone")) },
+    percussion: { label: "the percussion", kind: "section", ...boxOf(people.filter((p) => p.pose === "stand")) },
+    "principal-flute": { label: "the principal flute", kind: "single", ...boxOf([nearest(byInst("flute"))]) },
+    "principal-clarinet": { label: "the principal clarinet", kind: "single", ...boxOf([nearest(byInst("clarinet", 15))]) },
+    "first-trumpet": { label: "the first trumpet", kind: "single", ...boxOf([nearest(byInst("trumpet"))]) },
+    tuba: { label: "the tuba", kind: "single", ...boxOf(byInst("tuba")) },
+  };
   return {
     id: preshow ? "musco-preshow" : "musco-concert",
     title: preshow ? "Musco — Wind Symphony, work lights (pre-show)" : "Musco — Wind Symphony, concert lighting",
@@ -231,6 +263,7 @@ export function makeMuscoScene(state = "concert") {
       percussion: section(-6.5, 6.5, 22.5, 22.5, 0.44),
       conductor: section(-0.8, 0.8, 13.6, 13.6, 0.25),
     },
+    targets,
     camera3d: cam,
     layers,
   };

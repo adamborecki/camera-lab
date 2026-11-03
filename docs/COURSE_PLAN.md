@@ -17,9 +17,9 @@ practice space for the camera half of that — the simulator equivalent of reps.
 | 1 | live | exposure triangle, aperture, shutter, ISO/gain, frame rate | — |
 | 2 | live | white balance, ND, focus/DOF, sensor size, challenges | HW1 |
 | 3 | built | the AX100's real controls and traps; framing a static wide; matching AX100↔AX100, GH5→AX100, AX100→RovoCam; Salmon livestream (program/preview/On Air); two-camera SGK gig | 3 warm-ups on a random body |
-| 4 | built | Musco: the multiview and the RP150's camera buttons, reading its screen against the house defaults, R/B gain vs gain, the brightest cue, the lit-button trap, spotting the one camera that's off, shading four PTZs to match the static wide | warm-ups: Salmon numbers, AX100 off auto, ND (HW2) on a random body |
-| 5 | planned | PTZ operation: joystick (inverted tilt), zoom rocker + speed, focus (AUTO on → off); shot sizes; taking a call ("camera 2, the trumpet solo") | framing, shading |
-| 6 | planned | switching: program/preview, CUT/AUTO, calling shots, static wide as the safe shot, ISO vs program recordings | PTZ, matching |
+| 4 | built | Musco: the multiview and the RP150's camera buttons, reading its screen against the house defaults, R/B gain vs gain, the brightest cue, shading four PTZs to match the static wide | warm-ups: Salmon numbers, AX100 off auto |
+| 5 | live | PTZ operation: joystick, P/T SPEED, zoom, focus (AUTO on → off); shot sizes (wide, section, tight); the tally and taking calls on your pair; a first go on the switcher (ready/take, the static wide as the safe shot); a four-call gig on a random pair | warm-ups: ND (HW2), lit-button trap and the one camera that's off (HW4) |
+| 6 | planned | switching in depth: calling shots, CUT vs AUTO, ISO vs program recordings (HW5 already covers ready/take and the static wide as the safe shot) | PTZ, matching |
 | 7 | planned | capstone: a simulated Musco concert as switcher and as camera operator | everything |
 
 Order principle (instructor): put the hands-on, "what do I actually press at the gig" skills
@@ -74,5 +74,6 @@ Sources: [Panasonic 8–18 vs 7–14](https://mirrorlesscomparison.com/micro-fou
 
 ## Open questions for the instructor
 
+- Musco RP150 joystick: does tilt run inverted? (Nov 3: "not sure"; there is a speed knob.) The sim tilts the normal way and tells students to nudge the stick first.
 - RovoCam exposure settings in Salmon; the RovoControl + joystick workflow in detail (photos).
 - AX100 MANUAL button vs. PROGRAM AE; close-up photos of its side panel and LCD.

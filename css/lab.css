@@ -992,3 +992,72 @@ main:has(.stage-lab:not([hidden])) {
 /* which room the picture is in */
 .scene-tag { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
 .scene-tag[hidden] { display: none; }
+
+/* ---------- tally: program (red) and preview (green) on the multiview ---------- */
+.monitor-tile.pgm .monitor-screen { outline: 3px solid #e3262f; }
+.monitor-tile.pvw .monitor-screen { outline: 3px solid #22b04a; }
+.monitor-tally {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 3;
+  font: 700 0.7rem "Barlow Condensed", sans-serif;
+  letter-spacing: 0.08em;
+  padding: 0 0.35em;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.monitor-tally:empty { display: none; }
+.monitor-tile.pgm .monitor-tally { background: #e3262f; color: #fff; }
+.monitor-tile.pvw .monitor-tally { background: #22b04a; color: #fff; }
+.monitor-wall.switcher .monitor-tile.active .monitor-name::after { content: " · program"; color: #ff6a70; }
+.switcher-panel { margin-top: 0; }
+.switcher-panel .atem-buttons { grid-template-columns: repeat(5, minmax(2.6rem, 1fr)); }
+
+/* ---------- RP150 joystick (PTZ stations) ---------- */
+.rp-ptz { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+.rp-joy {
+  position: relative;
+  flex: none;
+  width: 9.5rem;
+  height: 9.5rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #2a2c33, #141519 70%);
+  border: 1px solid #3a3b42;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  touch-action: none;
+  cursor: grab;
+}
+.rp-joy::before, .rp-joy::after { content: ""; position: absolute; background: #2e3038; }
+.rp-joy::before { left: 50%; top: 12%; bottom: 12%; width: 1px; }
+.rp-joy::after { top: 50%; left: 12%; right: 12%; height: 1px; }
+.rp-joy:focus-visible { outline: 2px solid var(--accent, var(--accent-default)); outline-offset: 3px; }
+.rp-joy[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.rp-joy.held { cursor: grabbing; }
+.rp-joy-stick {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.7rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #5a5d68, #24252b 70%);
+  border: 1px solid #6a6d78;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.rp-joy.held .rp-joy-stick { border-color: #36d07a; }
+.rp-ptz-side { display: grid; gap: 0.5rem; justify-items: start; flex: 1; min-width: 8rem; }
+.rp-speed .knob { min-width: 7rem; }
+.rp-mirror { display: none; margin: 0; flex: 1 1 100%; }
+.rp-mirror canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #000; border-radius: 4px; outline: 2px solid #2a2d38; }
+.rp-mirror.pgm canvas { outline: 3px solid #e3262f; }
+.rp-mirror figcaption { font: 600 0.72rem "Barlow Condensed", sans-serif; letter-spacing: 0.04em; color: var(--text-dim); margin-top: 0.2rem; }
+@media (max-width: 899px) {
+  .rp-mirror { display: block; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .rp-mirror { display: none; }
+}

@@ -65,7 +65,13 @@ function guided(api) {
       else if (step.enter.settings) api.apply(step.enter.settings);
       if (step.enter.unlock) api.unlock(step.enter.unlock);
       if (step.enter.tool) api.showTool(step.enter.tool);
+      // Musco calls: the switcher's tally, another operator's move, and
+      // which camera the controller is on when the step opens.
+      if (step.enter.tally) api.setTally?.(step.enter.tally);
+      for (const m of step.enter.moves || []) api.move?.(m);
+      if (step.enter.select) api.select?.(step.enter.select);
     }
+    api.clearLiveMoves?.();
     countEl.textContent = `Step ${index + 1} of ${s.steps.length}`;
     textEl.innerHTML = step.text;
     feedbackEl.hidden = true;
@@ -90,7 +96,10 @@ function guided(api) {
     const step = s.steps[index];
     if (satisfied || !step) return;
     const ctx = { ...api.ctx(), touchedKeys };
-    const pass = step.when(ctx);
+    // liveRule: touching the camera on program (red tally) fails the step,
+    // whatever else is right — that change went out to everyone watching.
+    const live = (step.liveRule ?? s.liveRule) && ctx.liveMoves > 0 && ctx.tally?.program;
+    const pass = !live && step.when(ctx);
     feedbackEl.hidden = false;
     if (pass) {
       satisfied = true;
@@ -110,7 +119,10 @@ function guided(api) {
       stepFails++;
       bumpCounter(s.id, "failedChecks");
       feedbackEl.className = "step-feedback fail";
-      const notYet = (typeof step.notYet === "function" ? step.notYet(ctx) : step.notYet) || DEFAULT_NOT_YET;
+      const notYet = live
+        ? `Camera ${ctx.tally.program} is on program (red), and it changed while it was live — everyone watching saw that. Leave the red camera alone, set up your shot on the other one, and check again.`
+        : (typeof step.notYet === "function" ? step.notYet(ctx) : step.notYet) || DEFAULT_NOT_YET;
+      if (live) api.clearLiveMoves?.();
       feedbackEl.innerHTML = `<span class="fail-mark" aria-hidden="true">✗</span> ${notYet}`;
     }
   }

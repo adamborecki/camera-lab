@@ -12,8 +12,8 @@ import { Renderer } from "../render/renderer.js";
 import { getScene, scenes } from "../scenes/index.js";
 import { cameras, getCamera } from "../../data/cameras.js";
 import {
-  frameCenter,
-  MAX_FRAME_ZOOM,
+  viewFor,
+  withPtzAim,
   derive,
   normalizeSettings,
   settingsFromPreset,
@@ -160,6 +160,9 @@ export function mountLab(container, station) {
   const canvas = container.querySelector(".viewport-canvas");
   const reticle = container.querySelector(".reticle");
   const recBtn = container.querySelector(".rec-btn");
+  // The switcher doesn't roll the cameras (that's the operators' and the
+  // recorders' job), so its station has no record button.
+  recBtn.hidden = !!station.switcher;
   const hint = container.querySelector(".viewport-hint");
   const chipsEl = container.querySelector(".tool-chips");
   const controlsEl = container.querySelector(".controls");
@@ -214,7 +217,8 @@ export function mountLab(container, station) {
   function rigStart(rig) {
     const own = rig.def.start || (rigs.length === 1 ? station.start : {}) || {};
     const start = scene.id === station.scene ? own : {};
-    return normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start }, scene), rig.camera, scene);
+    const s = normalizeSettings(settingsFromPreset({ ...scene.defaults, ...start }, scene), rig.camera, scene);
+    return rig.def.ptz ? withPtzAim(s, scene, rig.def.aim) : s;
   }
 
   function resetSettings(extra = {}) {
@@ -263,7 +267,7 @@ export function mountLab(container, station) {
     if (key === "aperture") next.apertureSet = value;
     // Grabbing a control by hand takes it off auto, as on a real camera.
     if (!silent && next.auto?.[key] && !fromRing) next.auto = { ...next.auto, [key]: false };
-    if (key === "aperture" || key === "focal") next = normalizeSettings(next, camera, scene);
+    if (key === "aperture" || key === "focal" || key === "aimU" || key === "aimV") next = normalizeSettings(next, camera, scene);
     settings = next;
     derived = derive(settings, camera, scene);
     saveActive();
@@ -271,6 +275,11 @@ export function mountLab(container, station) {
     if (!fromDial && dials[key]) dials[key].setValue(settings[key], true);
     if (key === "focal" && dials.aperture) dials.aperture.setValue(settings.aperture, true);
     if (silent) return;
+    if (liveWarning()) {
+      interaction();
+      activity.onChange(key);
+      return;
+    }
     if (narrate) {
       const c = describeChange(key, prev, settings, prevD, derived, camera);
       if (c.short && dials[key]) dials[key].flash(c.short === "0" ? "±0" : c.short, c.tone);
@@ -292,8 +301,152 @@ export function mountLab(container, station) {
     derived = derive(settings, camera, scene);
     saveActive();
     dirty = true;
+    liveWarning();
     interaction();
     activity.onChange(`auto:${key}`);
+  }
+
+  // ---------- pan & tilt (PTZ rigs on the RP150 joystick) ----------
+  // The joystick asks for a velocity; how fast that moves the picture
+  // depends on the P/T SPEED knob and the zoom (the same push covers less
+  // of the stage zoomed in). Sim values: README → Technical verification.
+  let ptSpeed = station.ptSpeed ?? 3;
+  const PT_RATE = [0, 0.07, 0.15, 0.3, 0.55, 0.9]; // frame-widths per second at full push
+  function pan(dx, dy, seconds) {
+    const rig = rigs[active];
+    if (rig.def.readOnly) {
+      feedEl.textContent = `${rig.label || rig.id} is the static wide — look, don't touch.`;
+      return;
+    }
+    if (settings.aimU == null) return;
+    const step = (PT_RATE[ptSpeed] * seconds) / derived.frameZoom;
+    settings = normalizeSettings({ ...settings, aimU: settings.aimU + dx * step, aimV: settings.aimV + dy * step }, camera, scene);
+    derived = derive(settings, camera, scene);
+    saveActive();
+    dirty = true;
+    interaction();
+    liveWarning();
+    activity.onChange(ptSpeed <= 2 ? "pan:slow" : "pan");
+  }
+  function setPtSpeed(v) {
+    ptSpeed = Math.max(1, Math.min(5, Math.round(v)));
+    activity.onChange("ptSpeed");
+  }
+
+  // ---------- tally: program (red) and preview (green) ----------
+  // On a switched show every operator watches the tally: a camera on
+  // program is going out live, so it doesn't move. Steps set the tally
+  // (enter.tally) to play the switcher; a station with `switcher: true`
+  // hands the switcher to the student instead.
+  let tally = { program: station.tally?.program ?? null, preview: station.tally?.preview ?? null };
+  let liveMoves = 0;
+  let lastLiveSay = 0;
+  function liveWarning() {
+    const rig = rigs[active];
+    if (!tally.program || rig.id !== tally.program) return false;
+    liveMoves++;
+    const now = performance.now();
+    if (now - lastLiveSay > 1500) {
+      feedEl.textContent = `🔴 ${rig.label || rig.id} is on PROGRAM — that change just went out live. Don't touch the red camera; work on the one that isn't.`;
+      lastLiveSay = now;
+    }
+    return true;
+  }
+  function setTally(next) {
+    const prog = tally.program;
+    tally = { ...tally, ...next };
+    if (tally.program !== prog) liveMoves = 0;
+    syncTally();
+    if (station.switcher && tally.program) {
+      const i = rigs.findIndex((r) => r.id === tally.program);
+      if (i >= 0 && i !== active) setActiveRig(i, { quiet: true });
+    }
+    dirty = true;
+  }
+  function syncTally() {
+    rigs.forEach((r) => {
+      if (!r.tile) return;
+      r.tile.classList.toggle("pgm", r.id === tally.program);
+      r.tile.classList.toggle("pvw", r.id === tally.preview && r.id !== tally.program);
+      const t = r.tile.querySelector(".monitor-tally");
+      if (t) t.textContent = r.id === tally.program ? "PGM" : r.id === tally.preview ? "PVW" : "";
+    });
+    if (switcherEl) {
+      switcherEl.querySelectorAll('[data-bus="program"] [data-src]').forEach((b) => b.classList.toggle("lit-red", b.dataset.src === tally.program));
+      switcherEl.querySelectorAll('[data-bus="preview"] [data-src]').forEach((b) => b.classList.toggle("lit-green", b.dataset.src === tally.preview));
+    }
+  }
+
+  // Scripted operator moves (enter.move): another operator swings a camera
+  // to a new shot over a few seconds. ctx.rigs[id].moving while it does.
+  let moves = [];
+  function startMove({ rig: id, to, seconds = 4 }) {
+    const rig = rigs.find((r) => r.id === id);
+    if (!rig) return;
+    if (rigs[active] === rig) saveActive();
+    const t = to.target && scene.targets?.[to.target];
+    if (t) {
+      const a = rig.def.angle;
+      const du = a ? a.shift * (1 / t.depth - 1 / (a.aimDepth || 10)) : 0;
+      to = { ...to, aimU: (t.x0 + t.x1) / 2 + du, aimV: (t.y0 + t.y1) / 2, focus: to.focus ?? t.depth };
+    }
+    moves = moves.filter((m) => m.rig !== rig);
+    moves.push({ rig, from: { ...rig.settings }, to, start: performance.now(), ms: seconds * 1000 });
+  }
+  function stepMoves(now) {
+    if (!moves.length) return;
+    moves = moves.filter((m) => {
+      const k = Math.min(1, (now - m.start) / m.ms);
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const lerp = (a, b) => (b == null ? a : a + (b - a) * e);
+      const f = m.from;
+      const next = { ...m.rig.settings, aimU: lerp(f.aimU, m.to.aimU), aimV: lerp(f.aimV, m.to.aimV), focal: m.to.focal ? f.focal * (m.to.focal / f.focal) ** e : f.focal, focus: m.to.focus ? f.focus * (m.to.focus / f.focus) ** e : f.focus };
+      m.rig.settings = normalizeSettings(next, m.rig.camera, scene);
+      m.rig.derived = derive(m.rig.settings, m.rig.camera, scene);
+      if (m.rig === rigs[active]) loadActive();
+      dirty = true;
+      if (k >= 1) activity.onChange("move:done");
+      return k < 1;
+    });
+  }
+
+  // The switcher (station.switcher): PROGRAM and PREVIEW rows and CUT. The
+  // big picture follows program, the way the program monitor does.
+  let switcherEl = null;
+  function buildSwitcher() {
+    const srcs = rigs.map((r) => r.id);
+    const row = (bus) => `<div class="atem-row"><span class="atem-label">${bus.toUpperCase()}</span><div class="atem-buttons" data-bus="${bus}">${srcs.map((id) => `<button type="button" class="atem-btn" data-src="${id}">${id}</button>`).join("")}</div></div>`;
+    controlsEl.innerHTML = `
+      <div class="atem-panel switcher-panel" role="group" aria-label="Switcher">
+        <p class="body-panel-title">Switcher · <span>preview what's next, then CUT</span></p>
+        ${row("program")}${row("preview")}
+        <div class="atem-row atem-actions"><button type="button" class="atem-btn atem-cut" data-cut>CUT</button></div>
+      </div>`;
+    switcherEl = controlsEl.querySelector(".switcher-panel");
+    switcherEl.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      interaction();
+      if (b.dataset.cut != null) {
+        if (!tally.preview) return;
+        const was = tally.program;
+        setTally({ program: tally.preview, preview: was });
+        feedEl.textContent = `CUT: Camera ${tally.program} is on program${movingNote(tally.program)}.`;
+        activity.onChange(`program:${tally.program}${moves.some((m) => m.rig.id === tally.program) ? ":moving" : ""}`);
+      } else if (b.closest('[data-bus="preview"]')) {
+        setTally({ preview: b.dataset.src });
+        feedEl.textContent = `Camera ${b.dataset.src} in preview (green). Nothing has gone out yet.`;
+        activity.onChange(`preview:${b.dataset.src}`);
+      } else if (b.closest('[data-bus="program"]')) {
+        setTally({ program: b.dataset.src });
+        feedEl.textContent = `Hot cut: Camera ${b.dataset.src} straight to program${movingNote(b.dataset.src)}. (It works, but preview + CUT lets you look first.)`;
+        activity.onChange(`program:${b.dataset.src}${moves.some((m) => m.rig.id === b.dataset.src) ? ":moving" : ""}`);
+      }
+    });
+    syncTally();
+  }
+  function movingNote(id) {
+    return moves.some((m) => m.rig.id === id) ? " — while it was still moving, so the move went out live" : "";
   }
 
   // ---------- controls ----------
@@ -315,6 +468,13 @@ export function mountLab(container, station) {
     tabsEl.hidden = true;
     controlsEl.classList.remove("tabbed");
     hint.hidden = !canFocus();
+    switcherEl = null;
+    if (station.switcher) {
+      buildSwitcher();
+      hud.setVisible(false);
+      hint.hidden = true;
+      return;
+    }
     if (rigs[active].def.reference) {
       controlsEl.innerHTML = `<p class="control-note">This camera isn't yours to change — it's the one to match.</p>`;
       return;
@@ -333,6 +493,9 @@ export function mountLab(container, station) {
         active,
         select: (i) => setActiveRig(i),
         panelEl: controlsEl,
+        ...(rigs[active].def.ptz ? { pan, ptSpeed: () => ptSpeed, setPtSpeed } : {}),
+        tally: () => tally,
+        mirror: () => canvas,
       });
       hud.setVisible(false);
       hint.hidden = true;
@@ -453,13 +616,18 @@ export function mountLab(container, station) {
     wall.innerHTML = "";
     wall.style.setProperty("--tiles", String(Math.min(rigs.length, 3)));
     wall.classList.toggle("many", rigs.length > 2);
+    wall.classList.toggle("switcher", !!station.switcher);
     rigs.forEach((rig, i) => {
       const tile = document.createElement("figure");
       tile.className = "monitor-tile";
       tile.dataset.rig = String(i);
-      tile.innerHTML = `<div class="monitor-screen"><canvas></canvas></div><figcaption><span class="monitor-name"></span><span class="monitor-cam"></span></figcaption>`;
+      tile.innerHTML = `<div class="monitor-screen"><canvas></canvas><span class="monitor-tally" aria-live="polite"></span></div><figcaption><span class="monitor-name"></span><span class="monitor-cam"></span></figcaption>`;
       tile.querySelector(".monitor-name").textContent = rig.label || rig.id;
-      if (!rig.def.reference) {
+      if (station.switcher) {
+        // Tapping a monitor on the switcher's multiview puts it in preview.
+        tile.classList.add("selectable");
+        tile.addEventListener("click", () => switcherEl?.querySelector(`[data-bus="preview"] [data-src="${rig.id}"]`)?.click());
+      } else if (!rig.def.reference) {
         tile.classList.add("selectable");
         tile.addEventListener("click", (e) => {
           if (i !== active && !e.target.closest(".viewport")) setActiveRig(i);
@@ -471,6 +639,7 @@ export function mountLab(container, station) {
     });
     placeViewport();
     buildRigTabs();
+    syncTally();
   }
 
   function placeViewport() {
@@ -489,7 +658,7 @@ export function mountLab(container, station) {
   function buildRigTabs() {
     const editable = rigs.map((r, i) => [r, i]).filter(([r]) => !r.def.reference);
     // The RP150 has its own camera buttons; tabs would just repeat them.
-    const controller = station.bodyControls && rigs.every((r) => r.camera.id === "ue150");
+    const controller = (station.bodyControls && rigs.every((r) => r.camera.id === "ue150")) || station.switcher;
     rigTabsEl.hidden = editable.length < 2 || controller;
     rigTabsEl.innerHTML = "";
     for (const [r, i] of editable) {
@@ -504,7 +673,7 @@ export function mountLab(container, station) {
     }
   }
 
-  function setActiveRig(i) {
+  function setActiveRig(i, { quiet = false } = {}) {
     if (i === active || rigs[i].def.reference) return;
     saveActive();
     active = i;
@@ -515,7 +684,9 @@ export function mountLab(container, station) {
     buildPickers();
     syncRecButton();
     dirty = true;
-    feedEl.textContent = `Now controlling ${rigs[i].label || rigs[i].id} (${camera.name}).`;
+    if (quiet) return;
+    const live = tally.program === rigs[i].id ? " 🔴 It's on PROGRAM — hands off until the switcher takes another camera." : "";
+    feedEl.textContent = `Now controlling ${rigs[i].label || rigs[i].id} (${camera.name}).${live}`;
     activity.onChange("rig");
   }
 
@@ -563,6 +734,7 @@ export function mountLab(container, station) {
       const list = station.scenes ? scenes.filter((s) => station.scenes.some((p) => s.id.startsWith(p))) : scenes.filter((s) => !s.hidden);
       pickersEl.appendChild(picker("Scene", list, scene.id, (id) => setScene(id)));
     }
+    if (station.switcher) return;
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "chip";
@@ -657,6 +829,7 @@ export function mountLab(container, station) {
 
   // ---------- tap to focus ----------
   function canFocus() {
+    if (station.switcher) return false;
     return ((station.controls || []).includes("focus") || usesBody()) && !locked.has("focus") && !rigs[active].def.reference;
   }
   canvas.addEventListener("click", (e) => {
@@ -668,7 +841,7 @@ export function mountLab(container, station) {
     v = vw.y + (v - 0.5) / vw.zoom;
     hint.hidden = true;
     if (!canFocus()) {
-      feedEl.textContent = "Focus is fixed in this station.";
+      feedEl.textContent = station.switcher ? "You're on the switcher here — the camera operators run the cameras." : "Focus is fixed in this station.";
       return;
     }
     const hit = renderer.pickDepth(u, v, parallaxOf(rigs[active]));
@@ -704,10 +877,9 @@ export function mountLab(container, station) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   function frameView(rig) {
     // The camera points at the scene's subject (or where this rig's operator
-    // aimed it); zooming scales straight in on that point (frameCenter).
-    const frame = rig.derived.frameZoom;
-    const c = frameCenter(rig.def.aim || scene.aim, frame, scene.maxFrameZoom || MAX_FRAME_ZOOM);
-    return { x: c.x, y: c.y, zoom: frame };
+    // aimed it); zooming scales straight in on that point (frameCenter). A
+    // PTZ points where its joystick left it (viewFor).
+    return viewFor(scene, rig.settings, rig.derived, rig.def.aim);
   }
   function currentView(rig) {
     const f = frameView(rig);
@@ -808,6 +980,7 @@ export function mountLab(container, station) {
   function tick() {
     stepFocusAnim();
     const nowMs = performance.now();
+    stepMoves(nowMs);
     runAutos(nowMs);
     const now = (nowMs - t0) / 1000;
     const fi = Math.floor(now / derived.captureInterval);
@@ -902,7 +1075,7 @@ export function mountLab(container, station) {
     rigs.forEach((r, i) => {
       const s = i === active ? settings : r.settings;
       const d = i === active ? derived : r.derived;
-      out[r.id] = { settings: s, derived: d, camera: i === active ? camera : r.camera, stats: r.stats, meter: r.meter, view: frameView({ ...r, derived: d }), def: r.def, recording: r.recording, start: r.start };
+      out[r.id] = { settings: s, derived: d, camera: i === active ? camera : r.camera, stats: r.stats, meter: r.meter, view: frameView({ ...r, settings: s, derived: d }), def: r.def, recording: r.recording, start: r.start, moving: moves.some((m) => m.rig === r) };
     });
     return out;
   }
@@ -920,6 +1093,9 @@ export function mountLab(container, station) {
       activeRig: rigs[active].id,
       recording,
       cameraMeter: rigs[active].meter,
+      tally: { ...tally },
+      liveMoves,
+      ptSpeed,
     }),
     // Fresh scope stats for the current settings (used on challenge submit).
     freshStats: () =>
@@ -948,6 +1124,13 @@ export function mountLab(container, station) {
       applyTools();
     },
     say: (text) => (feedEl.textContent = text),
+    setTally: (t) => setTally(t),
+    move: (m) => startMove(m),
+    clearLiveMoves: () => (liveMoves = 0),
+    select: (id) => {
+      const i = rigs.findIndex((r) => r.id === id);
+      if (i >= 0) setActiveRig(i, { quiet: true });
+    },
   };
   const activity = createActivity(api);
 
@@ -968,6 +1151,9 @@ export function mountLab(container, station) {
       setScene,
       setCamera,
       rig: (i) => setActiveRig(i),
+      pan: (dx, dy, seconds = 1) => pan(dx, dy, seconds),
+      ptSpeed: (v) => setPtSpeed(v),
+      tally: (t) => setTally(t),
       magnify: (x, y) => {
         magCenter = { x, y };
         toolsOn.add("magnify");
