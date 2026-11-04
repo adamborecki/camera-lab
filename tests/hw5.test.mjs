@@ -124,8 +124,10 @@ for (const pair of ["1-3", "4-6"]) {
       const c = () => ctx(rigs, id, { tally: step.enter.tally });
       assert.ok(!step.when(c()), `call ${i + 1} passes before anything is done`);
       const before = rigs[id];
-      const target = Object.keys(scene.targets).find((t) => step.text.includes(scene.targets[t].label.replace(/ \(.*\)/, "")) && (scene.targets[t].kind === "single") === /tight/.test(step.text));
-      rigs[id] = solve(before, target, scene.targets[target].kind);
+      const { target, kind } = step.call;
+      assert.equal(step.call.rig, id);
+      assert.equal(/tight/.test(step.text), kind === "single", `call ${i + 1}: "tight" in the text iff it's a single`);
+      rigs[id] = solve(before, target, kind);
       assert.ok(step.when(c()), `call ${i + 1} (${target}): ${step.notYet(c())}`);
       // left on AUTO focus: not yet
       const auto = moved(rigs[id], { auto: { focus: true } });
@@ -144,20 +146,26 @@ test("Ready… Take: the switcher steps follow ready → take, and a moving came
   const s = station("musco-ready-take");
   const rigs = rigsOf(s);
   const [ready, take, safe, take4, back] = s.steps;
-  const c = (tally, keys = [], moving = false) => ({ ...ctx(rigs, "2", { tally, touchedKeys: new Set(keys) }), rigs: { ...rigs, 4: { ...rigs["4"], moving } } });
+  const c = (tally, { keys = [], moving = false, takenMoving = false } = {}) => ({ ...ctx(rigs, "2", { tally, touchedKeys: new Set(keys), takenMoving }), rigs: { ...rigs, 4: { ...rigs["4"], moving } } });
   assert.ok(!ready.when(c({ program: "2", preview: null })));
   assert.ok(ready.when(c({ program: "2", preview: "3" })));
   assert.ok(!take.when(c({ program: "2", preview: "3" })));
   assert.ok(take.when(c({ program: "3", preview: "2" })));
-  assert.ok(!safe.when(c({ program: "4", preview: "3" }, ["program:4:moving"], true)), "taking the moving camera passes");
-  assert.match(safe.notYet(c({ program: "4", preview: "3" }, ["program:4:moving"], true)), /still moving/);
-  assert.ok(safe.when(c({ program: "2", preview: "3" }, ["program:2"], true)));
-  assert.ok(!take4.when(c({ program: "4", preview: "2" }, [], true)), "take 4 passes while it's still moving");
-  assert.ok(take4.when(c({ program: "4", preview: "2" }, [], false)));
+  // Step 3: Camera 4 hunts until the next step (wander), so it's never the answer.
+  assert.ok(safe.enter.moves[0].to.wander, "Camera 4 should keep hunting through step 3");
+  assert.ok(!safe.when(c({ program: "3", preview: "4" }, { moving: true })), "staying on 3 passes");
+  assert.ok(!safe.when(c({ program: "4", preview: "3" }, { moving: true, takenMoving: true })), "taking the moving camera passes");
+  assert.match(safe.notYet(c({ program: "4", preview: "3" }, { moving: true, takenMoving: true })), /still moving/);
+  assert.ok(safe.when(c({ program: "2", preview: "3" }, { moving: true })));
+  // Step 4: only once it has stopped, and a take made mid-move can be redone.
+  assert.ok(!take4.when(c({ program: "4", preview: "2" }, { moving: true, takenMoving: true })), "take 4 passes while it's still moving");
+  assert.ok(!take4.when(c({ program: "4", preview: "2" }, { takenMoving: true })), "a take made mid-move passes once it stops");
+  assert.match(take4.notYet(c({ program: "4", preview: "2" }, { takenMoving: true })), /Go back to 2/);
+  assert.ok(take4.when(c({ program: "4", preview: "2" })));
   assert.ok(!back.when(c({ program: "4", preview: "2" })));
-  assert.ok(back.when(c({ program: "2", preview: "4" }, ["program:2"])));
-  // The scripted move lands Camera 4 on a passing trumpet shot.
-  const m = safe.enter.moves[0];
+  assert.ok(back.when(c({ program: "2", preview: "4" }, { keys: ["program:2"] })));
+  // The landing move puts Camera 4 on a passing trumpet shot.
+  const m = take4.enter.moves[0];
   const t = scene.targets[m.to.target];
   const a = s.rigs.find((d) => d.id === "4").angle;
   const du = a.shift * (1 / t.depth - 1 / a.aimDepth);

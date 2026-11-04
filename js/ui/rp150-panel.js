@@ -85,7 +85,7 @@ export class Rp150Panel {
   }
 
   // Drag the stick (or hold an arrow key); it springs back when let go.
-  // The push is squared so small pushes give fine control.
+  // The push is raised to the 1.5 power so small pushes give fine control.
   bindJoystick() {
     const h = this.host;
     const pad = this.el.querySelector(".rp-joy");
@@ -115,7 +115,7 @@ export class Rp150Panel {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const m = Math.hypot(push[0], push[1]);
-      if (m > 0.04) h.pan(push[0] * m, push[1] * m, dt);
+      if (m > 0.04) h.pan(push[0] * Math.sqrt(m), push[1] * Math.sqrt(m), dt);
       raf = requestAnimationFrame(run);
     };
     const start = () => {

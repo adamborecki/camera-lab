@@ -1000,7 +1000,7 @@ main:has(.stage-lab:not([hidden])) {
   position: absolute;
   top: 4px;
   left: 4px;
-  z-index: 3;
+  z-index: 6; /* above the viewport, which is z-index 5 on phones */
   font: 700 0.7rem "Barlow Condensed", sans-serif;
   letter-spacing: 0.08em;
   padding: 0 0.35em;

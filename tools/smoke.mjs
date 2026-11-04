@@ -231,7 +231,12 @@ for (const [w, h, tag] of [
   await check(page, false, "took camera 4 mid-move");
   await page.click('[data-bus="program"] [data-src="2"]');
   await check(page, true, "safe shot: 2");
-  await page.waitForTimeout(14500);
+  // Camera 4 settles over 5 s: a take mid-move fails, a retake after passes.
+  await page.click('[data-bus="preview"] [data-src="4"]');
+  await page.click("[data-cut]");
+  await check(page, false, "took 4 while it was settling");
+  await page.click('[data-bus="program"] [data-src="2"]');
+  await page.waitForTimeout(5500);
   await page.click('[data-bus="preview"] [data-src="4"]');
   await page.click("[data-cut]");
   await check(page, true, "take 4 after it landed");

@@ -215,7 +215,7 @@ export function makeMuscoScene(state = "concert") {
   const targets = {
     ensemble: { label: "the whole band", kind: "wide", ...boxOf(people.filter((p) => p.pose !== "conduct")) },
     flutes: { label: "the flutes", kind: "section", ...boxOf(byInst("flute")) },
-    clarinets: { label: "the clarinets (front row)", kind: "section", ...boxOf(byInst("clarinet", 15)) },
+    clarinets: { label: "the front-row clarinets", kind: "section", ...boxOf(byInst("clarinet", 15)) },
     saxes: { label: "the saxes", kind: "section", ...boxOf(byInst("sax")) },
     horns: { label: "the horns", kind: "section", ...boxOf(byInst("horn")) },
     trumpets: { label: "the trumpets", kind: "section", ...boxOf(byInst("trumpet")) },

@@ -311,7 +311,7 @@ export function mountLab(container, station) {
   // depends on the P/T SPEED knob and the zoom (the same push covers less
   // of the stage zoomed in). Sim values: README → Technical verification.
   let ptSpeed = station.ptSpeed ?? 3;
-  const PT_RATE = [0, 0.07, 0.15, 0.3, 0.55, 0.9]; // frame-widths per second at full push
+  const PT_RATE = [0, 0.14, 0.24, 0.38, 0.6, 0.95]; // frame-widths per second at full push
   function pan(dx, dy, seconds) {
     const rig = rigs[active];
     if (rig.def.readOnly) {
@@ -340,6 +340,8 @@ export function mountLab(container, station) {
   // hands the switcher to the student instead.
   let tally = { program: station.tally?.program ?? null, preview: station.tally?.preview ?? null };
   let liveMoves = 0;
+  // Whether the camera now on program was still moving when it was taken.
+  let takenMoving = false;
   let lastLiveSay = 0;
   function liveWarning() {
     const rig = rigs[active];
@@ -347,7 +349,7 @@ export function mountLab(container, station) {
     liveMoves++;
     const now = performance.now();
     if (now - lastLiveSay > 1500) {
-      feedEl.textContent = `🔴 ${rig.label || rig.id} is on PROGRAM — that change just went out live. Don't touch the red camera; work on the one that isn't.`;
+      feedEl.textContent = `🔴 ${rig.def.name || rig.label || rig.id} is on PROGRAM — that change just went out live. Don't touch the red camera; work on the one that isn't.`;
       lastLiveSay = now;
     }
     return true;
@@ -355,7 +357,10 @@ export function mountLab(container, station) {
   function setTally(next) {
     const prog = tally.program;
     tally = { ...tally, ...next };
-    if (tally.program !== prog) liveMoves = 0;
+    if (tally.program !== prog) {
+      liveMoves = 0;
+      takenMoving = moves.some((m) => m.rig.id === tally.program);
+    }
     syncTally();
     if (station.switcher && tally.program) {
       const i = rigs.findIndex((r) => r.id === tally.program);
@@ -377,8 +382,11 @@ export function mountLab(container, station) {
     }
   }
 
-  // Scripted operator moves (enter.move): another operator swings a camera
+  // Scripted operator moves (enter.moves): another operator swings a camera
   // to a new shot over a few seconds. ctx.rigs[id].moving while it does.
+  // `wander: true` keeps it hunting around that spot until the next move
+  // replaces it, so "it hasn't landed yet" stays true however long a student
+  // takes to read the step.
   let moves = [];
   function startMove({ rig: id, to, seconds = 4 }) {
     const rig = rigs.find((r) => r.id === id);
@@ -391,7 +399,7 @@ export function mountLab(container, station) {
       to = { ...to, aimU: (t.x0 + t.x1) / 2 + du, aimV: (t.y0 + t.y1) / 2, focus: to.focus ?? t.depth };
     }
     moves = moves.filter((m) => m.rig !== rig);
-    moves.push({ rig, from: { ...rig.settings }, to, start: performance.now(), ms: seconds * 1000 });
+    moves.push({ rig, from: { ...rig.settings }, to, start: performance.now(), ms: seconds * 1000, wander: !!to.wander });
   }
   function stepMoves(now) {
     if (!moves.length) return;
@@ -401,12 +409,17 @@ export function mountLab(container, station) {
       const lerp = (a, b) => (b == null ? a : a + (b - a) * e);
       const f = m.from;
       const next = { ...m.rig.settings, aimU: lerp(f.aimU, m.to.aimU), aimV: lerp(f.aimV, m.to.aimV), focal: m.to.focal ? f.focal * (m.to.focal / f.focal) ** e : f.focal, focus: m.to.focus ? f.focus * (m.to.focus / f.focus) ** e : f.focus };
+      if (m.wander) {
+        const t = (now - m.start) / 1000;
+        next.aimU += e * 0.07 * Math.sin(t * 1.3);
+        next.aimV += e * 0.03 * Math.sin(t * 0.9 + 1);
+      }
       m.rig.settings = normalizeSettings(next, m.rig.camera, scene);
       m.rig.derived = derive(m.rig.settings, m.rig.camera, scene);
       if (m.rig === rigs[active]) loadActive();
       dirty = true;
-      if (k >= 1) activity.onChange("move:done");
-      return k < 1;
+      if (k >= 1 && !m.wander) activity.onChange("move:done");
+      return k < 1 || m.wander;
     });
   }
 
@@ -685,7 +698,7 @@ export function mountLab(container, station) {
     syncRecButton();
     dirty = true;
     if (quiet) return;
-    const live = tally.program === rigs[i].id ? " 🔴 It's on PROGRAM — hands off until the switcher takes another camera." : "";
+    const live = tally.program === rigs[i].id ? " 🔴 It's on PROGRAM: hands off until the switcher takes another camera." : "";
     feedEl.textContent = `Now controlling ${rigs[i].label || rigs[i].id} (${camera.name}).${live}`;
     activity.onChange("rig");
   }
@@ -750,6 +763,7 @@ export function mountLab(container, station) {
       buildControls();
       dirty = true;
       feedEl.textContent = many ? `${rig.label || rig.id} reset to this station's starting settings.` : "Camera reset to this station's starting settings.";
+      liveWarning();
       activity.onChange("reset");
     });
     pickersEl.appendChild(reset);
@@ -1095,6 +1109,7 @@ export function mountLab(container, station) {
       cameraMeter: rigs[active].meter,
       tally: { ...tally },
       liveMoves,
+      takenMoving,
       ptSpeed,
     }),
     // Fresh scope stats for the current settings (used on challenge submit).

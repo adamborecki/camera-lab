@@ -30,6 +30,7 @@ import { checks } from "../js/lab/feedback.js";
 import { shotReport, framedOk, shotOk, shotAdvice } from "../js/lab/shots.js";
 import { effectiveWb, frameCenter } from "../js/sim/camera-model.js";
 import { getCamera } from "./cameras.js";
+import { storageKey } from "../js/deploy-context.js";
 
 // Floor sections, in display order. Rename the label text freely (e.g. to
 // match an actual Canvas assignment name each term) — station.group values
@@ -88,9 +89,9 @@ function aimedAt(c, id, target, tol) {
 function shotNotYet(c, id, target, kind, { aimOnly = false, tol = 0.12 } = {}) {
   if (c.activeRig !== id) return `Camera ${id}'s button isn't lit: you're on Camera ${c.activeRig}. Press ${id} on the RP150 first.`;
   const r = shotReport(c.rigs[id], c.scene, target);
-  if (aimOnly && r.visible) {
-    const dirs = [Math.abs(r.offX) > tol && `pan ${r.offX < 0 ? "left" : "right"}`, Math.abs(r.offY) > tol + 0.03 && `tilt ${r.offY < 0 ? "up" : "down"}`].filter(Boolean);
-    return `Close: ${dirs.join(" and ")} a little more.`;
+  if (aimOnly) {
+    const dirs = [Math.abs(r.offX) > tol && `pan ${r.offX < 0 ? "left" : "right"}`, Math.abs(r.offY) > tol + 0.03 && `tilt ${r.offY < 0 ? "up" : "down"}`].filter(Boolean).join(" and ");
+    return r.visible ? `Close: ${dirs} a little more.` : `${r.target.label.replace(/^the /, "The ")} aren't in the frame yet: ${dirs}.`;
   }
   if (!aimOnly && r.sharp === false && framedOk(r, kind) && c.rigs[id].settings.auto?.focus) return "Still on FOCUS AUTO: once it's sharp, press it again to turn AUTO off.";
   return shotAdvice(r, `Camera ${id}`, kind);
@@ -119,6 +120,7 @@ export function gigStation(pairKey) {
     const prev = i ? pair.calls[i - 1][0] : "2";
     const label = { flutes: "the flutes", clarinets: "the clarinets", "first-trumpet": "the first trumpet", saxes: "the saxes", trumpets: "the trumpets", horns: "the horns", trombones: "the trombones", tuba: "the tuba" }[target];
     return {
+      call: { rig: id, target, kind },
       enter: { tally: { program: prev, preview: id } },
       text: `${i ? `The switcher took Camera ${prev}: it's red now.` : "The concert has started on Camera 2, the static wide."} <strong>“Camera ${id}, ${label}${SIZE_WORD[kind]}.”</strong>`,
       when: (c) => onShot(c, id, target, kind) && !c.rigs[id].settings.auto?.focus && leftAlone.every((k) => k.test(c).pass),
@@ -133,8 +135,9 @@ export function gigStation(pairKey) {
   });
   return {
     id: "musco-gig-calls",
-    title: "Musco Gig: Take the Calls",
-    purpose: "Your pair of close-ups, four calls, and the tally. A different pair some days.",
+    // The pair is in the title so the Finish receipt says which one was run.
+    title: `Musco Gig: Take the Calls (Cameras ${mine.join(" & ")})`,
+    purpose: "Your pair of close-ups, four calls, and the tally.",
     group: "hw5",
     accent: "#FF6B9A",
     mode: "guided",
@@ -150,7 +153,21 @@ export function gigStation(pairKey) {
     steps: calls,
   };
 }
-const MUSCO_GIG = [gigStation(Math.random() < 0.5 ? "1-3" : "4-6")];
+// Picked once per browser and remembered, so a reload mid-gig doesn't swap
+// the cameras out from under a student (or the receipt).
+function gigPair() {
+  const key = storageKey("cameralab.gigPair");
+  try {
+    const saved = globalThis.localStorage?.getItem(key);
+    if (GIG_PAIRS[saved]) return saved;
+  } catch {}
+  const pick = Math.random() < 0.5 ? "1-3" : "4-6";
+  try {
+    globalThis.localStorage?.setItem(key, pick);
+  } catch {}
+  return pick;
+}
+const MUSCO_GIG = [gigStation(gigPair())];
 
 // Lens Shopping: is everyone (standing to bow) inside the frame, and which
 // GH5 lens is the longest that still gets them all in from here?
@@ -1394,7 +1411,7 @@ export const stations = [
         when: (c) => onShot(c, "1", "first-trumpet", "single"),
         notYet: (c) => shotNotYet(c, "1", "first-trumpet", "single"),
         hint: "The first trumpet sits closest to the center of the trumpet row.",
-        done: "That's taking calls. If a call asks you to move the camera that's live, ask to be cleared first (“clear on 3?”) or wait for the switcher to take another shot.",
+        done: "That's taking calls: the camera that isn't red gets the next shot ready, and the red one stays still until the switcher takes something else.",
       },
     ],
   },
@@ -1427,22 +1444,27 @@ export const stations = [
         done: "CUT swaps them: 3 is live, and 2 dropped into preview, ready to come back.",
       },
       {
-        enter: { moves: [{ rig: "4", to: { target: "trumpets", focal: 120 }, seconds: 14 }] },
-        text: "A trumpet solo is coming. Watch Camera 4: its operator is still swinging it over to the trumpets. The director says “Ready 4…” and the solo starts <em>before Camera 4 has landed</em>. Get something safe on program, now.",
-        when: (c) => (c.tally.program === "2" && c.touchedKeys.has("program:2")) || (c.tally.program === "4" && !c.touchedKeys.has("program:4:moving") && !c.rigs["4"].moving),
+        enter: { moves: [{ rig: "4", to: { target: "trumpets", focal: 70, wander: true }, seconds: 3 }] },
+        text: "A trumpet solo is coming. Watch Camera 4: its operator is still hunting for the trumpets. The director says “Ready 4…” and the solo starts <em>before Camera 4 has found them</em>. Get something safe on program, now.",
+        when: (c) => c.tally.program === "2",
         notYet: (c) =>
-          c.touchedKeys.has("program:4:moving")
-            ? "Camera 4 was still moving when you took it, so the swing went out live. When the shot you want isn't ready, take the one that always is."
+          c.tally.program === "4"
+            ? "Camera 4 was still moving when you took it, so the hunt went out live. When the shot you want isn't ready, take the one that always is."
             : "The solo's started. Which camera is always ready?",
-        done: (c) =>
-          c.tally.program === "2"
-            ? "The static wide. It's never wrong, and it buys the operator a few seconds."
-            : "You waited until 4 had landed. That works too, as long as program wasn't sitting on the wrong shot meanwhile. When in doubt, the static wide.",
+        done: "The static wide. It's never wrong, and it buys the operator a few seconds.",
       },
       {
-        text: "Camera 4 has landed: trumpets, framed and sharp. <strong>“Ready 4… take 4.”</strong>",
-        when: (c) => c.tally.program === "4" && !c.rigs["4"].moving,
-        notYet: (c) => (c.rigs["4"].moving ? "Camera 4 is still moving. Wait for it to settle." : c.tally.preview !== "4" ? "Ready 4: put it in preview." : "Take 4: press CUT."),
+        enter: { moves: [{ rig: "4", to: { target: "trumpets", focal: 120 }, seconds: 5 }] },
+        text: "Camera 4's operator has found the trumpets and is settling the shot. Once it has <em>stopped moving</em>: <strong>“Ready 4… take 4.”</strong>",
+        when: (c) => c.tally.program === "4" && !c.rigs["4"].moving && !c.takenMoving,
+        notYet: (c) =>
+          c.tally.program === "4" && c.takenMoving
+            ? "You took 4 while it was still settling, so the end of the move went out live. Go back to 2, wait for 4 to stop, then take it again."
+            : c.rigs["4"].moving
+              ? "Camera 4 is still moving. Wait for it to settle."
+              : c.tally.preview !== "4"
+                ? "Ready 4: put it in preview."
+                : "Take 4: press CUT.",
         done: "The solo, on the shot that was ready for it.",
       },
       {
