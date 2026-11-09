@@ -55,6 +55,16 @@ test("PTZ: pan stays inside the drawn scene, and the static wide can't be driven
   }
 });
 
+test("zoomed all the way out, every close-up camera has a wide (with margin)", () => {
+  const rigs = rigsOf(station("musco-red-means-live"));
+  for (const id of ["1", "3", "4", "6"]) {
+    const r = moved(rigs[id], { focal: 40, aimU: 0.5, aimV: 0.5 });
+    const rep = shotReport(r, scene, "ensemble");
+    assert.ok(framedOk(rep, "wide"), `Camera ${id} at full wide`);
+    assert.ok(rep.fill >= 0.65 + 0.03, `Camera ${id}: full wide passes with only ${rep.fill.toFixed(3)} fill`);
+  }
+});
+
 test("untouched() notices a pan", () => {
   const rigs = rigsOf(station("musco-red-means-live"));
   const k = checks.untouched("4");

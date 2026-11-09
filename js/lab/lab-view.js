@@ -757,13 +757,16 @@ export function mountLab(container, station) {
       // On a multi-camera station, only the camera you're controlling —
       // never the one you already finished.
       const rig = rigs[active];
+      const before = JSON.stringify(rig.settings);
       rig.settings = rigStart(rig);
       rig.derived = derive(rig.settings, rig.camera, scene);
       loadActive();
       buildControls();
       dirty = true;
       feedEl.textContent = many ? `${rig.label || rig.id} reset to this station's starting settings.` : "Camera reset to this station's starting settings.";
-      liveWarning();
+      // A reset that changed nothing (the static wide, or a camera nobody
+      // touched) isn't a change on the live camera.
+      if (JSON.stringify(rig.settings) !== before) liveWarning();
       activity.onChange("reset");
     });
     pickersEl.appendChild(reset);

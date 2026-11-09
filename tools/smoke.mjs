@@ -220,6 +220,15 @@ for (const [w, h, tag] of [
   await check(page, true, "red-means-live step 1 after the warning");
   if (!(await page.locator(".monitor-tile.pgm .monitor-name").innerText()).includes("Camera 1")) failures.push("red-means-live: step 2 should put Camera 1 on program");
 
+  // Gig: resetting the static wide while it's on program changes nothing,
+  // so it mustn't count as touching the live camera.
+  await open(page, "musco-gig-calls");
+  await page.click('.rp-cam[data-cam="2"]');
+  await page.click(".lab-pickers .chip");
+  await page.click(".step-check");
+  await page.waitForTimeout(150);
+  if (/on program \(red\)/.test(await page.locator(".step-feedback").innerText())) failures.push("gig: resetting the static wide counted as a live change");
+
   // Ready… Take: the student switches.
   await open(page, "musco-ready-take");
   await page.click('[data-bus="preview"] [data-src="3"]');

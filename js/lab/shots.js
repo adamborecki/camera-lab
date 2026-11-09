@@ -13,7 +13,9 @@
 import { MAX_FRAME_ZOOM } from "../sim/camera-model.js";
 
 export const SHOT_RULES = {
-  wide: { center: 0.15, fill: 0.7 },
+  // At Musco the band fills 70% of the frame zoomed all the way out, so 0.65
+  // keeps "all the way out" a wide with margin (a test pins it).
+  wide: { center: 0.15, fill: 0.65 },
   section: { center: 0.12, fill: 0.6 },
   single: { center: 0.1, fill: 0 },
 };

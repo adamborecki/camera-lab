@@ -112,7 +112,7 @@ export class Rp150Panel {
     let raf = 0;
     let last = 0;
     const run = (now) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.3, (now - last) / 1000);
       last = now;
       const m = Math.hypot(push[0], push[1]);
       if (m > 0.04) h.pan(push[0] * Math.sqrt(m), push[1] * Math.sqrt(m), dt);
@@ -253,17 +253,33 @@ export class Rp150Panel {
         h.say(on ? "Focus AUTO on — let it find focus, then turn it off so it doesn't wander mid-shot." : "Focus AUTO off: focus stays where it is.");
       }
     });
+    // Held, the lever zooms by time, not by timer ticks: 3% per 60 ms however
+    // slowly the device is drawing (five camera feeds can make a phone slow,
+    // and a tick-based zoom crawled there).
     this.el.querySelectorAll("[data-zoom]").forEach((b) => {
       let timer = 0;
+      let last = 0;
       const dir = Number(b.dataset.zoom);
-      const go = () => h.change("focal", h.get().focal * (dir > 0 ? 1.03 : 1 / 1.03));
-      const stop = () => clearInterval(timer);
+      const go = (steps) => h.change("focal", h.get().focal * (dir > 0 ? 1.03 : 1 / 1.03) ** steps);
+      const tick = () => {
+        const now = performance.now();
+        go(Math.min(10, (now - last) / 60));
+        last = now;
+      };
+      // Letting go counts the time since the last tick (a busy page can skip ticks).
+      const stop = () => {
+        if (!timer) return;
+        clearInterval(timer);
+        timer = 0;
+        tick();
+      };
       b.addEventListener("pointerdown", (e) => {
         if (b.disabled) return;
         e.preventDefault();
-        go();
+        go(1);
+        last = performance.now();
         clearInterval(timer);
-        timer = setInterval(go, 60);
+        timer = setInterval(tick, 60);
       });
       ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, stop));
     });
